@@ -5,7 +5,7 @@ mod affinity_propagation;
 fn main() {
     println!("Hello, world!");
     AffinityPropagation::begin(
-        100,
+        60000,
         Config {
             workers: 16,
             damping: 0.1,

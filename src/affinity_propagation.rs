@@ -7,6 +7,7 @@ type Value = f32;
 
 const NEG_INF: Value = (-1. as Value) * Value::INFINITY;
 
+#[derive(Copy, Clone)]
 pub struct Config {
     pub damping: f32,
     pub workers: usize,
@@ -27,7 +28,6 @@ pub struct AffinityPropagation {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
     availability: Array2<Value>,
-    workers: usize,
     solution: Vec<usize>,
     config: Config,
 }
@@ -36,7 +36,7 @@ impl AffinityPropagation {
     pub fn begin(m: usize, cfg: Config, iterations: usize) {
         let mut ap = AffinityPropagation::new(m, cfg);
         let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(ap.workers)
+            .num_threads(cfg.workers)
             .build()
             .unwrap();
         pool.scope(move |_| {
@@ -67,7 +67,6 @@ impl AffinityPropagation {
             similarity: Array2::zeros((m, m)),
             responsibility: Array2::zeros((m, m)),
             availability: Array2::zeros((m, m)),
-            workers: cfg.workers,
             config: cfg,
             solution: vec![0; m],
         }
