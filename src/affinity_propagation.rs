@@ -11,44 +11,80 @@ const NEG_INF: Value = (-1. as Value) * Value::INFINITY;
 pub struct Config {
     pub damping: f32,
     pub workers: usize,
+    pub iterations: usize,
+    pub preference: f32,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             damping: 0.5,
+            preference: -10.,
             workers: 4,
+            iterations: 3,
         }
+    }
+}
+
+pub trait Similarity {
+    fn similarity(self, x: Array2<Value>) -> Array2<Value>;
+}
+
+pub struct Euclidean;
+
+impl Similarity for Euclidean {
+    fn similarity(self, x: Array2<Value>) -> Array2<Value> {
+        let x_dim = x.dim();
+        let mut out = Array2::<Value>::zeros((x_dim.0, x_dim.0));
+        x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
+            x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
+                let mut row_diff = &row1 - &row2;
+                row_diff.par_mapv_inplace(|a| -1. * a.powi(2));
+                out[[idx1, idx2]] = -1. * row_diff.sum();
+            });
+        });
+        out
     }
 }
 
 /// Implementation derived from:
 /// https://www.ritchievink.com/blog/2018/05/18/algorithm-breakdown-affinity-propagation/
-pub struct AffinityPropagation {
+pub struct AffinityPropagation<L> {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
     availability: Array2<Value>,
     solution: Vec<usize>,
+    labels: Vec<L>,
     config: Config,
 }
 
-impl AffinityPropagation {
-    pub fn begin(m: usize, cfg: Config, iterations: usize) {
-        let mut ap = AffinityPropagation::new(m, cfg);
+impl<L> AffinityPropagation<L> {
+    /// Generate cluster predictions for set of `x` values and `y` labels
+    /// - x: 2-D array of (rows=samples, cols=attr_values)
+    /// - y: 1-D array of label values attached to each row in `x`
+    /// - cfg: Prediction configurations
+    pub fn predict<S>(x: Array2<Value>, y: Vec<L>, cfg: Config, s: S)
+    where
+        S: Similarity,
+        L: std::marker::Send,
+    {
+        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
+        let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cfg.workers)
             .build()
             .unwrap();
         pool.scope(move |_| {
-            for i in 0..iterations {
+            for i in 0..cfg.iterations {
                 println!("Beginning iteration {}", i + 1);
                 ap.update_r();
                 ap.update_a();
+                println!("{:?}", ap.similarity);
                 let sol = &ap.availability + &ap.responsibility;
                 let mut exemplars: Vec<usize> = Vec::new();
                 sol.axis_iter(Axis(1))
                     .into_par_iter()
-                    .map(|col| AffinityPropagation::max_argmax(col).0)
+                    .map(|col| AffinityPropagation::<L>::max_argmax(col).0)
                     .collect_into_vec(&mut exemplars);
                 let exemplars: HashSet<usize> = HashSet::from_iter(exemplars.into_iter());
                 let solution = Vec::from_iter(exemplars.into_iter());
@@ -62,13 +98,16 @@ impl AffinityPropagation {
         });
     }
 
-    fn new(m: usize, cfg: Config) -> Self {
+    fn new(x: Array2<Value>, y: Vec<L>, cfg: Config) -> Self {
+        let dim = x.dim();
+        let y_len = y.len();
         Self {
-            similarity: Array2::zeros((m, m)),
-            responsibility: Array2::zeros((m, m)),
-            availability: Array2::zeros((m, m)),
+            similarity: x,
+            responsibility: Array2::zeros(dim),
+            availability: Array2::zeros(dim),
             config: cfg,
-            solution: vec![0; m],
+            labels: y,
+            solution: vec![0; y_len],
         }
     }
 
@@ -90,7 +129,7 @@ impl AffinityPropagation {
         let mut max: Vec<(usize, Value)> = Vec::new();
         v.axis_iter(Axis(1))
             .into_par_iter()
-            .map(|col| AffinityPropagation::max_argmax(col))
+            .map(|col| AffinityPropagation::<L>::max_argmax(col))
             .collect_into_vec(&mut max);
         let idx_max: Array1<usize> = max.iter().map(|t| t.0).collect::<Vec<usize>>().into();
         let first_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
@@ -104,7 +143,7 @@ impl AffinityPropagation {
         let mut max: Vec<(usize, Value)> = Vec::new();
         v.axis_iter(Axis(1))
             .into_par_iter()
-            .map(|col| AffinityPropagation::max_argmax(col))
+            .map(|col| AffinityPropagation::<L>::max_argmax(col))
             .collect_into_vec(&mut max);
         let second_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
 
@@ -138,7 +177,7 @@ impl AffinityPropagation {
         let mut a = self.responsibility.clone();
 
         // a[a < 0] = 0
-        a.par_mapv_inplace(|c| if c < 1.5 { 0. } else { c });
+        a.par_mapv_inplace(|c| if c < 0. { 0. } else { c });
 
         // np.fill_diagonal(a, 0)
         a.diag_mut().par_map_inplace(|c| *c = 0.);
@@ -197,17 +236,18 @@ impl AffinityPropagation {
             .last();
         (max_pos, max)
     }
-
-    // // TODO: May be of different types, need to see...
-    // fn similarity(x: Value, y: Value) {}
 }
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::affinity_propagation::{AffinityPropagation, Config};
+    use ndarray::{arr2, array, Array2};
 
     #[test]
     fn init() {
-        AffinityPropagation::begin(25000, Config::default(), 3);
+        let x: Array2<Value> = arr2(&[[1., 2., 3.], [4., 5., 6.]]);
+        let y = vec![0, 1];
+        AffinityPropagation::predict(x, y, Config::default(), Euclidean {});
     }
 }
