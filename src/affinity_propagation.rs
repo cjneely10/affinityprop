@@ -11,7 +11,8 @@ const NEG_INF: Value = (-1. as Value) * Value::INFINITY;
 pub struct Config {
     pub damping: f32,
     pub workers: usize,
-    pub iterations: usize,
+    pub max_iterations: usize,
+    pub convergence_iter: usize,
     pub preference: f32,
 }
 
@@ -21,7 +22,8 @@ impl Default for Config {
             damping: 0.5,
             preference: -10.,
             workers: 4,
-            iterations: 3,
+            max_iterations: 10,
+            convergence_iter: 3,
         }
     }
 }
@@ -49,24 +51,23 @@ impl Similarity for Euclidean {
 
 /// Implementation derived from:
 /// https://www.ritchievink.com/blog/2018/05/18/algorithm-breakdown-affinity-propagation/
-pub struct AffinityPropagation<L> {
+pub struct AffinityPropagation {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
     availability: Array2<Value>,
     solution: Vec<usize>,
-    labels: Vec<L>,
+    labels: Vec<String>,
     config: Config,
 }
 
-impl<L> AffinityPropagation<L> {
+impl AffinityPropagation {
     /// Generate cluster predictions for set of `x` values and `y` labels
     /// - x: 2-D array of (rows=samples, cols=attr_values)
     /// - y: 1-D array of label values attached to each row in `x`
     /// - cfg: Prediction configurations
-    pub fn predict<S>(x: Array2<Value>, y: Vec<L>, cfg: Config, s: S)
+    pub fn predict<S>(x: Array2<Value>, y: Vec<String>, cfg: Config, s: S)
     where
         S: Similarity,
-        L: std::marker::Send + std::fmt::Debug,
     {
         assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
         let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
@@ -75,7 +76,7 @@ impl<L> AffinityPropagation<L> {
             .build()
             .unwrap();
         pool.scope(move |_| {
-            for i in 0..cfg.iterations {
+            for i in 0..cfg.max_iterations {
                 println!("Beginning iteration {}", i + 1);
                 ap.update_r();
                 ap.update_a();
@@ -83,7 +84,7 @@ impl<L> AffinityPropagation<L> {
                 let mut exemplars: Vec<usize> = Vec::new();
                 sol.axis_iter(Axis(1))
                     .into_par_iter()
-                    .map(|col| AffinityPropagation::<L>::max_argmax(col).0)
+                    .map(|col| AffinityPropagation::max_argmax(col).0)
                     .collect_into_vec(&mut exemplars);
                 let exemplars: HashSet<usize> = HashSet::from_iter(exemplars.into_iter());
                 let solution = Vec::from_iter(exemplars.into_iter());
@@ -97,7 +98,7 @@ impl<L> AffinityPropagation<L> {
                     ap.solution
                         .iter()
                         .map(|e_idx| ap.labels.get(*e_idx).unwrap())
-                        .collect::<Vec<&L>>()
+                        .collect::<Vec<&String>>()
                 );
             }
             println!(
@@ -105,12 +106,12 @@ impl<L> AffinityPropagation<L> {
                 ap.solution
                     .iter()
                     .map(|e_idx| ap.labels.get(*e_idx).unwrap())
-                    .collect::<Vec<&L>>()
+                    .collect::<Vec<&String>>()
             );
         });
     }
 
-    fn new(x: Array2<Value>, y: Vec<L>, cfg: Config) -> Self {
+    fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
         let dim = x.dim();
         let y_len = y.len();
         Self {
@@ -141,7 +142,7 @@ impl<L> AffinityPropagation<L> {
         let mut max: Vec<(usize, Value)> = Vec::new();
         v.axis_iter(Axis(1))
             .into_par_iter()
-            .map(|col| AffinityPropagation::<L>::max_argmax(col))
+            .map(|col| AffinityPropagation::max_argmax(col))
             .collect_into_vec(&mut max);
         let idx_max: Array1<usize> = max.iter().map(|t| t.0).collect::<Vec<usize>>().into();
         let first_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
@@ -155,7 +156,7 @@ impl<L> AffinityPropagation<L> {
         let mut max: Vec<(usize, Value)> = Vec::new();
         v.axis_iter(Axis(1))
             .into_par_iter()
-            .map(|col| AffinityPropagation::<L>::max_argmax(col))
+            .map(|col| AffinityPropagation::max_argmax(col))
             .collect_into_vec(&mut max);
         let second_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
 
@@ -259,7 +260,7 @@ mod test {
     #[test]
     fn init() {
         let x: Array2<Value> = arr2(&[[1., 2., 3.], [4., 5., 6.]]);
-        let y = vec![0, 1];
+        let y = vec!["0".to_string(), "1".to_string()];
         AffinityPropagation::predict(x, y, Config::default(), Euclidean {});
     }
 }
