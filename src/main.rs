@@ -10,14 +10,14 @@ extern crate clap;
 
 fn main() {
     let matches = clap_app!(myapp =>
-        (version: "1.0")
+        (version: "0.1.0")
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Set path to input file")
-        (@arg PREF: -p --preference +takes_value "Set preference")
-        (@arg MAX_ITER: -m --max-iter +takes_value "Maximum iterations")
-        (@arg CONV_ITER: -c --convergence-iter +takes_value "Convergence iterations")
-        (@arg DAMPING: -d --dampig +takes_value "Set damping value")
+        (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Set preference")
+        (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations")
+        (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations")
+        (@arg DAMPING: -d --damping +takes_value "Set damping value")
         (@arg THREADS: -t --threads +takes_value "Set number of worker threads")
     )
     .get_matches();
@@ -43,7 +43,7 @@ fn main() {
         .unwrap_or("0.9")
         .parse::<f32>()
         .unwrap();
-    let workers = matches
+    let threads = matches
         .value_of("THREADS")
         .unwrap_or("4")
         .parse::<usize>()
@@ -52,16 +52,13 @@ fn main() {
         max_iterations = convergence_iter;
     }
     let (x, y) = from_file(Path::new(&input_file).to_path_buf());
-    AffinityPropagation::predict(
-        x,
-        y,
-        Config {
-            preference,
-            max_iterations,
-            convergence_iter,
-            damping,
-            workers,
-        },
-        Euclidean {},
-    );
+    let cfg = Config {
+        preference,
+        max_iterations,
+        convergence_iter,
+        damping,
+        threads,
+    };
+    println!("{:?}", cfg);
+    AffinityPropagation::predict(x, y, cfg, Euclidean::default());
 }

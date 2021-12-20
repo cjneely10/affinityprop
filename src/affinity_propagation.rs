@@ -1,16 +1,16 @@
 use ndarray::parallel::prelude::*;
 use ndarray::{s, Array1, Array2, ArrayView, Axis, Dim, Zip};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::iter::FromIterator;
 
 pub type Value = f32;
 
 const NEG_INF: Value = (-1. as Value) * Value::INFINITY;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Config {
     pub damping: f32,
-    pub workers: usize,
+    pub threads: usize,
     pub max_iterations: usize,
     pub convergence_iter: usize,
     pub preference: f32,
@@ -21,7 +21,7 @@ impl Default for Config {
         Self {
             damping: 0.5,
             preference: -10.,
-            workers: 4,
+            threads: 4,
             max_iterations: 10,
             convergence_iter: 3,
         }
@@ -34,6 +34,12 @@ pub trait Similarity {
 
 pub struct Euclidean;
 
+impl Default for Euclidean {
+    fn default() -> Self {
+        Euclidean {}
+    }
+}
+
 impl Similarity for Euclidean {
     fn similarity(self, x: Array2<Value>) -> Array2<Value> {
         let x_dim = x.dim();
@@ -41,7 +47,7 @@ impl Similarity for Euclidean {
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
             x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
                 let mut row_diff = &row1 - &row2;
-                row_diff.par_mapv_inplace(|a| -1. * a.powi(2));
+                row_diff.par_mapv_inplace(|a| a.powi(2));
                 out[[idx1, idx2]] = -1. * row_diff.sum();
             });
         });
@@ -55,7 +61,7 @@ pub struct AffinityPropagation {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
     availability: Array2<Value>,
-    solution: Vec<usize>,
+    solution: Vec<String>,
     labels: Vec<String>,
     config: Config,
 }
@@ -67,53 +73,54 @@ impl AffinityPropagation {
     /// - cfg: Prediction configurations
     pub fn predict<S>(x: Array2<Value>, y: Vec<String>, cfg: Config, s: S)
     where
-        S: Similarity,
+        S: Similarity + std::marker::Send,
     {
         assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
-        let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
-        ap.add_preference_to_sim();
         let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(cfg.workers)
+            .num_threads(cfg.threads)
             .build()
             .unwrap();
         pool.scope(move |_| {
+            let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
+            ap.add_preference_to_sim();
             let mut conv_iterations = 0;
             for i in 0..cfg.max_iterations {
-                println!("Beginning iteration {}", i + 1);
                 ap.update_r();
                 ap.update_a();
                 let sol = &ap.availability + &ap.responsibility;
-                let mut exemplars: Vec<usize> = Vec::new();
-                sol.axis_iter(Axis(1))
-                    .into_par_iter()
-                    .map(|col| AffinityPropagation::max_argmax(col).0)
-                    .collect_into_vec(&mut exemplars);
-                let exemplars: HashSet<usize> = HashSet::from_iter(exemplars.into_iter());
-                let solution = Vec::from_iter(exemplars.into_iter());
+                let exemplar_map = ap.generate_exemplar_map(sol);
+                let mut solution = Vec::from_iter(exemplar_map.keys().map(|s| s.clone()));
+                solution.sort();
                 if solution == ap.solution {
                     conv_iterations += 1;
                     if conv_iterations == cfg.convergence_iter {
                         break;
                     }
+                } else {
+                    conv_iterations = 0;
                 }
-                ap.solution = solution;
-                println!(
-                    "Iter({}): {:?}",
-                    i,
-                    ap.solution
-                        .iter()
-                        .map(|e_idx| ap.labels.get(*e_idx).unwrap())
-                        .collect::<Vec<&String>>()
-                );
+                ap.solution = solution.clone();
+                println!("Iter({}): {:?}", i + 1, solution);
             }
-            println!(
-                "Final: {:?}",
-                ap.solution
-                    .iter()
-                    .map(|e_idx| ap.labels.get(*e_idx).unwrap())
-                    .collect::<Vec<&String>>()
-            );
+            println!("Final: {:?}", ap.solution);
         });
+    }
+
+    fn generate_exemplar_map(&mut self, sol: Array2<Value>) -> HashMap<String, Vec<String>> {
+        let mut exemplar_map = HashMap::new();
+        sol.axis_iter(Axis(1)).enumerate().for_each(|(idx, col)| {
+            let examplar = AffinityPropagation::max_argmax(col);
+            let exemplar_label = self.labels.get(examplar.0).unwrap();
+            let sample_label = self.labels.get(idx).unwrap();
+            if !exemplar_map.contains_key(exemplar_label) {
+                exemplar_map.insert(exemplar_label.to_owned(), vec![]);
+            }
+            exemplar_map
+                .get_mut(exemplar_label)
+                .unwrap()
+                .push(sample_label.to_owned());
+        });
+        exemplar_map
     }
 
     fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
@@ -125,7 +132,7 @@ impl AffinityPropagation {
             availability: Array2::zeros(dim),
             config: cfg,
             labels: y,
-            solution: vec![0; y_len],
+            solution: vec!["0".to_string(); y_len],
         }
     }
 
@@ -247,7 +254,7 @@ impl AffinityPropagation {
 
     fn max_argmax(data: ArrayView<Value, Dim<[usize; 1]>>) -> (usize, Value) {
         let mut max_pos = 0;
-        let mut max: Value = 0.;
+        let mut max: Value = NEG_INF;
         data.iter()
             .enumerate()
             .map(|(idx, val)| {
@@ -270,7 +277,7 @@ mod test {
     #[test]
     fn init() {
         let x: Array2<Value> = arr2(&[[1., 2., 3.], [4., 5., 6.]]);
-        let y = vec!["0".to_string(), "1".to_string()];
-        AffinityPropagation::predict(x, y, Config::default(), Euclidean {});
+        let y = vec!["1".to_string(), "2".to_string()];
+        AffinityPropagation::predict(x, y, Config::default(), Euclidean::default());
     }
 }
