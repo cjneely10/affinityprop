@@ -66,7 +66,7 @@ impl<L> AffinityPropagation<L> {
     pub fn predict<S>(x: Array2<Value>, y: Vec<L>, cfg: Config, s: S)
     where
         S: Similarity,
-        L: std::marker::Send,
+        L: std::marker::Send + std::fmt::Debug,
     {
         assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
         let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
@@ -79,7 +79,6 @@ impl<L> AffinityPropagation<L> {
                 println!("Beginning iteration {}", i + 1);
                 ap.update_r();
                 ap.update_a();
-                println!("{:?}", ap.similarity);
                 let sol = &ap.availability + &ap.responsibility;
                 let mut exemplars: Vec<usize> = Vec::new();
                 sol.axis_iter(Axis(1))
@@ -92,9 +91,22 @@ impl<L> AffinityPropagation<L> {
                     break;
                 }
                 ap.solution = solution;
-                println!("{}: {:?}", i, ap.solution);
+                println!(
+                    "Iter({}): {:?}",
+                    i,
+                    ap.solution
+                        .iter()
+                        .map(|e_idx| ap.labels.get(*e_idx).unwrap())
+                        .collect::<Vec<&L>>()
+                );
             }
-            println!("Final: {:?}", ap.solution);
+            println!(
+                "Final: {:?}",
+                ap.solution
+                    .iter()
+                    .map(|e_idx| ap.labels.get(*e_idx).unwrap())
+                    .collect::<Vec<&L>>()
+            );
         });
     }
 
