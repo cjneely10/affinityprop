@@ -45,16 +45,9 @@ impl Similarity for Euclidean {
         let mut out = Array2::<Value>::zeros((x_dim.0, x_dim.0));
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
             x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
-                if idx1 == idx2 {
-                    return;
-                }
-                if idx2 < idx1 {
-                    out[[idx2, idx1]] = out[[idx1, idx2]];
-                } else {
-                    let mut row_diff = &row1 - &row2;
-                    row_diff.par_mapv_inplace(|a| a.powi(2));
-                    out[[idx1, idx2]] = -1. * row_diff.sum();
-                }
+                let mut row_diff = &row1 - &row2;
+                row_diff.mapv_inplace(|a| a.powi(2));
+                out[[idx1, idx2]] = -1. * row_diff.sum();
             });
         });
         out
@@ -82,13 +75,12 @@ impl AffinityPropagation {
     {
         let x_dim = x.dim();
         assert_eq!(x_dim.0, y.len(), "`x` n_row != `y` length");
+        let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cfg.threads)
             .build()
             .unwrap();
         pool.scope(move |_| {
-            println!("Calculating similarity...");
-            let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
             ap.add_preference_to_sim();
             let mut conv_iterations = 0;
             let mut final_sol = HashMap::new();
@@ -98,9 +90,9 @@ impl AffinityPropagation {
                 ap.update_a();
                 let sol = &ap.availability + &ap.responsibility;
                 let exemplar_map = ap.generate_exemplar_map(sol);
-                // let mut solution = exemplar_map.keys().map(|k| *k).collect::<Vec<usize>>();
-                // solution.sort();
-                if exemplar_map == final_sol {
+                if exemplar_map.len() == final_sol.len()
+                    && final_sol.keys().all(|k| exemplar_map.contains_key(k))
+                {
                     conv_iterations += 1;
                     if conv_iterations == cfg.convergence_iter {
                         break;
@@ -109,7 +101,9 @@ impl AffinityPropagation {
                     conv_iterations = 0;
                     final_sol = exemplar_map;
                 }
-                println!("Iter({}): done!", i + 1);
+                if (i + 1) % 20 == 0 {
+                    println!("Iter({}): nClusters: {}", i + 1, final_sol.len());
+                }
             }
             let final_sol = final_sol
                 .keys()
@@ -133,11 +127,10 @@ impl AffinityPropagation {
     }
 
     fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
-        let dim = x.dim();
         Self {
-            similarity: x,
-            responsibility: Array2::zeros(dim),
-            availability: Array2::zeros(dim),
+            similarity: x.clone(),
+            responsibility: x.clone(),
+            availability: x,
             config: cfg,
             labels: y,
         }
@@ -261,7 +254,7 @@ impl AffinityPropagation {
 
     fn max_argmax(data: ArrayView<Value, Dim<[usize; 1]>>) -> (usize, Value) {
         let mut max_pos = 0;
-        let mut max: Value = NEG_INF;
+        let mut max: Value = data[0];
         data.iter()
             .enumerate()
             .map(|(idx, val)| {
