@@ -75,7 +75,7 @@ impl AffinityPropagation {
     {
         let x_dim = x.dim();
         assert_eq!(x_dim.0, y.len(), "`x` n_row != `y` length");
-        let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
+        let mut ap = Self::new(s.similarity(x), y, cfg);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cfg.threads)
             .build()
@@ -83,29 +83,26 @@ impl AffinityPropagation {
         pool.scope(move |_| {
             ap.add_preference_to_sim();
             let mut conv_iterations = 0;
-            let mut final_sol = HashMap::new();
+            let mut final_sol = Array2::zeros(ap.availability.dim());
             println!("Beginning clustering...");
             for i in 0..cfg.max_iterations {
                 ap.update_r();
                 ap.update_a();
                 let sol = &ap.availability + &ap.responsibility;
-                let exemplar_map = ap.generate_exemplar_map(sol);
-                if exemplar_map.len() == final_sol.len()
-                    && final_sol.keys().all(|k| exemplar_map.contains_key(k))
-                {
+                if final_sol.abs_diff_eq(&sol, 1e8) {
                     conv_iterations += 1;
-                    if conv_iterations == cfg.convergence_iter {
+                    if conv_iterations == ap.config.convergence_iter {
                         break;
+                    } else {
+                        conv_iterations = 0;
                     }
-                } else {
-                    conv_iterations = 0;
-                    final_sol = exemplar_map;
                 }
+                final_sol = sol;
                 if (i + 1) % 100 == 0 {
-                    println!("Iter({}): nClusters: {}", i + 1, final_sol.len());
+                    println!("Iter({})", i + 1);
                 }
             }
-            let final_sol = final_sol
+            let final_sol = Self::generate_exemplar_map(final_sol)
                 .keys()
                 .map(|v| ap.labels.get(*v).unwrap())
                 .collect::<Vec<&String>>();
@@ -113,7 +110,7 @@ impl AffinityPropagation {
         });
     }
 
-    fn generate_exemplar_map(&mut self, sol: Array2<Value>) -> HashMap<usize, Vec<usize>> {
+    fn generate_exemplar_map(sol: Array2<Value>) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::new();
         sol.axis_iter(Axis(1)).enumerate().for_each(|(idx, col)| {
             let exemplar = AffinityPropagation::max_argmax(col);
@@ -127,10 +124,11 @@ impl AffinityPropagation {
     }
 
     fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
+        let x_dim_0 = x.dim();
         Self {
-            similarity: x.clone(),
-            responsibility: x.clone(),
-            availability: x,
+            similarity: x,
+            responsibility: Array2::zeros(x_dim_0),
+            availability: Array2::zeros(x_dim_0),
             config: cfg,
             labels: y,
         }
@@ -142,7 +140,7 @@ impl AffinityPropagation {
     }
 
     fn update_r(&mut self) {
-        let dim = self.availability.dim().clone();
+        let dim = self.availability.dim();
         let mut v = Array2::zeros(dim);
 
         // v = S + A
@@ -159,7 +157,7 @@ impl AffinityPropagation {
         let mut max: Vec<(usize, Value)> = Vec::new();
         v.axis_iter(Axis(1))
             .into_par_iter()
-            .map(|col| AffinityPropagation::max_argmax(col))
+            .map(|col| Self::max_argmax(col))
             .collect_into_vec(&mut max);
         let idx_max: Array1<usize> = max.iter().map(|t| t.0).collect::<Vec<usize>>().into();
         let first_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
@@ -173,7 +171,7 @@ impl AffinityPropagation {
         let mut max: Vec<(usize, Value)> = Vec::new();
         v.axis_iter(Axis(1))
             .into_par_iter()
-            .map(|col| AffinityPropagation::max_argmax(col))
+            .map(|col| Self::max_argmax(col))
             .collect_into_vec(&mut max);
         let second_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
 
@@ -185,7 +183,7 @@ impl AffinityPropagation {
         Zip::from(max_matrix.axis_iter_mut(Axis(0)))
             .and(&idx_max)
             .and(&second_max)
-            .par_for_each(|mut r, &idx, &max| r.slice_mut(s![idx]).fill(max));
+            .par_for_each(|mut r, &idx, &_max| r.slice_mut(s![idx]).fill(_max));
 
         // new_val = S - max_matrix
         let mut new_val = Array2::<Value>::zeros(self.similarity.dim());
@@ -218,7 +216,7 @@ impl AffinityPropagation {
         let mut a = a.sum_axis(Axis(0));
         Zip::from(&mut a)
             .and(self.responsibility.diag())
-            .par_for_each(|a, &r| *a = *a + r);
+            .par_for_each(|_a, &r| *_a = *_a + r);
 
         // a = np.ones(A.shape) * a
         let mut a = Array2::<Value>::ones(self.availability.dim()) * a;
@@ -226,9 +224,9 @@ impl AffinityPropagation {
         // a -= np.clip(R, 0, np.inf)
         Zip::from(&mut a)
             .and(&self.responsibility)
-            .par_for_each(|a, &r| {
+            .par_for_each(|_a, &r| {
                 let r = if r < 0. { 0. } else { r };
-                *a -= r;
+                *_a -= r;
             });
 
         // a[a > 0] = 0
@@ -248,9 +246,10 @@ impl AffinityPropagation {
             .par_for_each(|_a, &_w| *_a = _w);
 
         // A = A * damping + (1 - damping) * a
+        let inv_damping = 1. - damping;
         Zip::from(&mut self.availability)
             .and(&a)
-            .par_for_each(|av, &_a| *av = *av * damping + (1. - damping) * _a);
+            .par_for_each(|av, &_a| *av = *av * damping + inv_damping * _a);
     }
 
     fn max_argmax(data: ArrayView<Value, Dim<[usize; 1]>>) -> (usize, Value) {
