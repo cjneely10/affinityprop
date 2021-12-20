@@ -89,13 +89,13 @@ impl AffinityPropagation {
                 ap.update_r();
                 ap.update_a();
                 let sol = &ap.availability + &ap.responsibility;
-                if final_sol.abs_diff_eq(&sol, 1e8) {
+                if final_sol.abs_diff_eq(&sol, 1e-8) {
                     conv_iterations += 1;
                     if conv_iterations == ap.config.convergence_iter {
                         break;
-                    } else {
-                        conv_iterations = 0;
                     }
+                } else {
+                    conv_iterations = 0;
                 }
                 final_sol = sol;
                 if (i + 1) % 100 == 0 {
