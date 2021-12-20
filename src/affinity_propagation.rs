@@ -80,7 +80,8 @@ impl AffinityPropagation {
     where
         S: Similarity + std::marker::Send,
     {
-        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
+        let x_dim = x.dim();
+        assert_eq!(x_dim.0, y.len(), "`x` n_row != `y` length");
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cfg.threads)
             .build()
@@ -114,7 +115,7 @@ impl AffinityPropagation {
                 .keys()
                 .map(|v| ap.labels.get(*v).unwrap())
                 .collect::<Vec<&String>>();
-            println!("Final: {:?}", final_sol);
+            println!("nClusters: {}, nSamples: {}", final_sol.len(), x_dim.0);
         });
     }
 
@@ -196,7 +197,7 @@ impl AffinityPropagation {
         // new_val = S - max_matrix
         let mut new_val = Array2::<Value>::zeros(self.similarity.dim());
         Zip::from(&mut new_val)
-            .and(&self.responsibility)
+            .and(&self.similarity)
             .and(&max_matrix)
             .par_for_each(|n, &r, &m| *n = r - m);
 
@@ -232,7 +233,7 @@ impl AffinityPropagation {
         Zip::from(&mut a)
             .and(&self.responsibility)
             .par_for_each(|a, &r| {
-                let r = if r < 0. { r } else { 0. };
+                let r = if r < 0. { 0. } else { r };
                 *a -= r;
             });
 
