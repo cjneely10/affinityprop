@@ -3,7 +3,7 @@ use ndarray::{s, Array1, Array2, ArrayView, Axis, Dim, Zip};
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
-type Value = f32;
+pub type Value = f32;
 
 const NEG_INF: Value = (-1. as Value) * Value::INFINITY;
 

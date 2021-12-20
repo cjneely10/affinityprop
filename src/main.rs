@@ -2,6 +2,7 @@ use crate::affinity_propagation::{AffinityPropagation, Config, Euclidean};
 use ndarray::arr2;
 
 mod affinity_propagation;
+mod ops;
 
 fn main() {
     println!("Hello, world!");
