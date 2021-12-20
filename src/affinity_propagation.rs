@@ -45,9 +45,16 @@ impl Similarity for Euclidean {
         let mut out = Array2::<Value>::zeros((x_dim.0, x_dim.0));
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
             x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
-                let mut row_diff = &row1 - &row2;
-                row_diff.par_mapv_inplace(|a| a.powi(2));
-                out[[idx1, idx2]] = -1. * row_diff.sum();
+                if idx1 == idx2 {
+                    return;
+                }
+                if idx2 < idx1 {
+                    out[[idx1, idx2]] = out[[idx2, idx1]];
+                } else {
+                    let mut row_diff = &row1 - &row2;
+                    row_diff.par_mapv_inplace(|a| a.powi(2));
+                    out[[idx1, idx2]] = -1. * row_diff.sum();
+                }
             });
         });
         out
@@ -79,6 +86,7 @@ impl AffinityPropagation {
             .build()
             .unwrap();
         pool.scope(move |_| {
+            println!("Calculating similarity...");
             let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
             ap.add_preference_to_sim();
             let mut conv_iterations = 0;
@@ -103,8 +111,8 @@ impl AffinityPropagation {
                 println!("Iter({}): done!", i + 1);
             }
             let final_sol = final_sol
-                .iter()
-                .map(|v| ap.labels.get(*(v.0)).unwrap())
+                .keys()
+                .map(|v| ap.labels.get(*v).unwrap())
                 .collect::<Vec<&String>>();
             println!("Final: {:?}", final_sol);
         });
