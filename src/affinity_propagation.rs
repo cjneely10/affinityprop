@@ -1,7 +1,6 @@
 use ndarray::parallel::prelude::*;
 use ndarray::{s, Array1, Array2, ArrayView, Axis, Dim, Zip};
 use std::collections::HashMap;
-use std::iter::FromIterator;
 
 pub type Value = f32;
 
@@ -61,7 +60,6 @@ pub struct AffinityPropagation {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
     availability: Array2<Value>,
-    solution: Vec<String>,
     labels: Vec<String>,
     config: Config,
 }
@@ -84,55 +82,55 @@ impl AffinityPropagation {
             let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
             ap.add_preference_to_sim();
             let mut conv_iterations = 0;
+            let mut final_sol = HashMap::new();
+            println!("Beginning clustering...");
             for i in 0..cfg.max_iterations {
                 ap.update_r();
                 ap.update_a();
                 let sol = &ap.availability + &ap.responsibility;
                 let exemplar_map = ap.generate_exemplar_map(sol);
-                let mut solution = Vec::from_iter(exemplar_map.keys().map(|s| s.clone()));
-                solution.sort();
-                if solution == ap.solution {
+                // let mut solution = exemplar_map.keys().map(|k| *k).collect::<Vec<usize>>();
+                // solution.sort();
+                if exemplar_map == final_sol {
                     conv_iterations += 1;
                     if conv_iterations == cfg.convergence_iter {
                         break;
                     }
                 } else {
                     conv_iterations = 0;
+                    final_sol = exemplar_map;
                 }
-                ap.solution = solution.clone();
-                println!("Iter({}): {:?}", i + 1, solution);
+                println!("Iter({}): done!", i + 1);
             }
-            println!("Final: {:?}", ap.solution);
+            let final_sol = final_sol
+                .iter()
+                .map(|v| ap.labels.get(*(v.0)).unwrap())
+                .collect::<Vec<&String>>();
+            println!("Final: {:?}", final_sol);
         });
     }
 
-    fn generate_exemplar_map(&mut self, sol: Array2<Value>) -> HashMap<String, Vec<String>> {
+    fn generate_exemplar_map(&mut self, sol: Array2<Value>) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::new();
         sol.axis_iter(Axis(1)).enumerate().for_each(|(idx, col)| {
-            let examplar = AffinityPropagation::max_argmax(col);
-            let exemplar_label = self.labels.get(examplar.0).unwrap();
-            let sample_label = self.labels.get(idx).unwrap();
-            if !exemplar_map.contains_key(exemplar_label) {
+            let exemplar = AffinityPropagation::max_argmax(col);
+            let exemplar_label = exemplar.0;
+            if !exemplar_map.contains_key(&exemplar_label) {
                 exemplar_map.insert(exemplar_label.to_owned(), vec![]);
             }
-            exemplar_map
-                .get_mut(exemplar_label)
-                .unwrap()
-                .push(sample_label.to_owned());
+            exemplar_map.get_mut(&exemplar_label).unwrap().push(idx);
         });
         exemplar_map
     }
 
     fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
         let dim = x.dim();
-        let y_len = y.len();
         Self {
             similarity: x,
             responsibility: Array2::zeros(dim),
             availability: Array2::zeros(dim),
             config: cfg,
             labels: y,
-            solution: vec!["0".to_string(); y_len],
         }
     }
 
