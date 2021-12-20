@@ -101,7 +101,7 @@ impl AffinityPropagation {
                     conv_iterations = 0;
                     final_sol = exemplar_map;
                 }
-                if (i + 1) % 20 == 0 {
+                if (i + 1) % 100 == 0 {
                     println!("Iter({}): nClusters: {}", i + 1, final_sol.len());
                 }
             }
@@ -196,9 +196,10 @@ impl AffinityPropagation {
 
         // R = R * damping + (1 - damping) * new_val
         let damping = self.config.damping;
+        let inv_damping = 1. - damping;
         Zip::from(&mut self.responsibility)
             .and(&new_val)
-            .par_for_each(|r, &n| *r = *r * damping + (1. - damping) * n);
+            .par_for_each(|r, &n| *r = *r * damping + inv_damping * n);
     }
 
     fn update_a(&mut self) {
