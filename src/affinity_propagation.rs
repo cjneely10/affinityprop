@@ -49,7 +49,7 @@ impl Similarity for Euclidean {
                     return;
                 }
                 if idx2 < idx1 {
-                    out[[idx1, idx2]] = out[[idx2, idx1]];
+                    out[[idx2, idx1]] = out[[idx1, idx2]];
                 } else {
                     let mut row_diff = &row1 - &row2;
                     row_diff.par_mapv_inplace(|a| a.powi(2));
