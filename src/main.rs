@@ -28,12 +28,12 @@ fn main() {
         .unwrap_or("-10.")
         .parse::<f32>()
         .unwrap();
-    let max_iter = matches
+    let mut max_iterations = matches
         .value_of("MAX_ITER")
         .unwrap_or("100")
         .parse::<usize>()
         .unwrap();
-    let conv_iter = matches
+    let convergence_iter = matches
         .value_of("CONV_ITER")
         .unwrap_or("10")
         .parse::<usize>()
@@ -43,21 +43,24 @@ fn main() {
         .unwrap_or("0.9")
         .parse::<f32>()
         .unwrap();
-    let threads = matches
+    let workers = matches
         .value_of("THREADS")
         .unwrap_or("4")
         .parse::<usize>()
         .unwrap();
+    if convergence_iter > max_iterations {
+        max_iterations = convergence_iter;
+    }
     let (x, y) = from_file(Path::new(&input_file).to_path_buf());
     AffinityPropagation::predict(
         x,
         y,
         Config {
             preference,
-            max_iterations: max_iter,
-            convergence_iter: conv_iter,
+            max_iterations,
+            convergence_iter,
             damping,
-            workers: threads,
+            workers,
         },
         Euclidean {},
     );

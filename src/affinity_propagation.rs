@@ -71,11 +71,13 @@ impl AffinityPropagation {
     {
         assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
         let mut ap = AffinityPropagation::new(s.similarity(x), y, cfg);
+        ap.add_preference_to_sim();
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cfg.workers)
             .build()
             .unwrap();
         pool.scope(move |_| {
+            let mut conv_iterations = 0;
             for i in 0..cfg.max_iterations {
                 println!("Beginning iteration {}", i + 1);
                 ap.update_r();
@@ -89,7 +91,10 @@ impl AffinityPropagation {
                 let exemplars: HashSet<usize> = HashSet::from_iter(exemplars.into_iter());
                 let solution = Vec::from_iter(exemplars.into_iter());
                 if solution == ap.solution {
-                    break;
+                    conv_iterations += 1;
+                    if conv_iterations == cfg.convergence_iter {
+                        break;
+                    }
                 }
                 ap.solution = solution;
                 println!(
@@ -122,6 +127,11 @@ impl AffinityPropagation {
             labels: y,
             solution: vec![0; y_len],
         }
+    }
+
+    fn add_preference_to_sim(&mut self) {
+        let pref = self.config.preference;
+        self.similarity.diag_mut().par_map_inplace(|v| *v = pref);
     }
 
     fn update_r(&mut self) {
@@ -255,7 +265,7 @@ impl AffinityPropagation {
 mod test {
     use super::*;
     use crate::affinity_propagation::{AffinityPropagation, Config};
-    use ndarray::{arr2, array, Array2};
+    use ndarray::{arr2, Array2};
 
     #[test]
     fn init() {
