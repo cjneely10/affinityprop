@@ -1,6 +1,7 @@
-use ndarray::parallel::prelude::*;
-use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
-use std::collections::HashMap;
+use ndarray::{Array, Array1, Array2, ArrayView, Axis, Dim, Zip};
+use std::collections::{HashMap, HashSet};
+use ndarray_rand::rand_distr::Uniform;
+use ndarray_rand::RandomExt;
 
 pub type Value = f32;
 
@@ -21,8 +22,8 @@ impl Default for Config {
             damping: 0.5,
             preference: -10.,
             threads: 4,
-            max_iterations: 100,
-            convergence_iter: 3,
+            max_iterations: 1000,
+            convergence_iter: 100,
         }
     }
 }
@@ -75,56 +76,57 @@ impl AffinityPropagation {
     {
         let x_dim = x.dim();
         assert_eq!(x_dim.0, y.len(), "`x` n_row != `y` length");
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(cfg.threads)
-            .build()
-            .unwrap();
-        pool.scope(move |_| {
-            let mut ap = Self::new(s.similarity(x), y, cfg);
-            let mut conv_iterations = 0;
-            let mut final_sol = Array2::zeros(ap.availability.dim());
-            let mut final_sol_map = HashMap::new();
-            println!("Beginning clustering...");
-            // println!("{:?}", ap.similarity);
-            for i in 0..cfg.max_iterations {
-                ap.update_r();
-                ap.update_a();
-                let mut sol = Array2::zeros(ap.availability.dim());
-                Zip::from(&mut sol)
-                    .and(&ap.availability)
-                    .and(&ap.responsibility)
-                    .par_for_each(|s, &a, &r| *s = a + r);
-                if final_sol.abs_diff_eq(&sol, 1e-8) {
-                    break;
-                } else {
-                    let _sol = Self::generate_exemplar_map(&sol);
-                    if final_sol_map.len() == _sol.len() && final_sol_map.keys().all(|k| _sol.contains_key(k)) {
-                        conv_iterations += 1;
-                        if conv_iterations == ap.config.convergence_iter {
-                            break;
-                        }
-                    } else {
-                        conv_iterations = 0;
-                        final_sol_map = _sol;
-                        final_sol = sol;
+        let mut ap = Self::new(s.similarity(x), y, cfg);
+        let mut conv_iterations = 0;
+        let mut final_sol = Array2::zeros(ap.availability.dim());
+        let mut final_exemplars = HashSet::new();
+        println!("Beginning clustering...");
+        // println!("{:?}", ap.similarity);
+        for i in 0..cfg.max_iterations {
+            ap.update_r();
+            ap.update_a();
+            let sol = &ap.availability + &ap.responsibility;
+            if final_sol.abs_diff_eq(&sol, 1e-8) {
+                break;
+            } else {
+                let sol_map = Self::generate_exemplars(&sol);
+                if final_exemplars.len() == sol_map.len()
+                    && final_exemplars.iter().all(|k| sol_map.contains(k))
+                {
+                    conv_iterations += 1;
+                    if conv_iterations == ap.config.convergence_iter {
+                        break;
                     }
+                } else {
+                    conv_iterations = 0;
                 }
-                if (i + 1) % 100 == 0 {
-                    println!("Iter({}) nClusters: {}", i + 1, final_sol_map.len());
-                }
+                final_exemplars = sol_map;
+                final_sol = sol;
             }
-            let exemplars = final_sol_map
-                .keys()
-                .map(|v| ap.labels.get(*v).unwrap())
-                .collect::<Vec<&String>>();
-            println!("nClusters: {}, nSamples: {}", final_sol_map.len(), x_dim.0);
+            if (i + 1) % 100 == 0 {
+                println!("Iter({}) nClusters: {}", i + 1, final_exemplars.len());
+            }
+        }
+        let exemplars = Self::generate_exemplar_map(&final_sol)
+            .keys()
+            .map(|v| ap.labels.get(*v).unwrap())
+            .collect::<Vec<&String>>();
+        println!("nClusters: {}, nSamples: {}", exemplars.len(), x_dim.0);
+    }
+
+    fn generate_exemplars(sol: &Array2<Value>) -> HashSet<usize> {
+        let mut exemplars = HashSet::new();
+        sol.axis_iter(Axis(1)).for_each(|col| {
+            let exemplar = Self::max_argmax(col);
+            exemplars.insert(exemplar.0);
         });
+        exemplars
     }
 
     fn generate_exemplar_map(sol: &Array2<Value>) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::new();
         sol.axis_iter(Axis(1)).enumerate().for_each(|(idx, col)| {
-            let exemplar = AffinityPropagation::max_argmax(col);
+            let exemplar = Self::max_argmax(col);
             let exemplar_label = exemplar.0;
             if !exemplar_map.contains_key(&exemplar_label) {
                 exemplar_map.insert(exemplar_label.to_owned(), vec![]);
@@ -149,130 +151,69 @@ impl AffinityPropagation {
 
     fn add_preference_to_sim(&mut self) {
         let pref = self.config.preference;
-        self.similarity.diag_mut().par_map_inplace(|v| *v = pref);
+        self.similarity.diag_mut().map_inplace(|v| *v = pref);
+        let dim = self.similarity.dim().0;
+        self.similarity = &self.similarity * Array::random((dim, dim), Uniform::new(0., 1.));
     }
 
     fn update_r(&mut self) {
-        let dim = self.availability.dim();
-        let mut v = Array2::zeros(dim);
+        let mut tmp: Array2<Value> = &self.availability + &self.similarity;
 
-        // v = S + A
-        Zip::from(&mut v)
-            .and(&self.similarity)
-            .and(&self.availability)
-            .par_for_each(|v, &s, &a| *v = s + a);
+        let mut max_idx = Vec::new();
+        let mut max1 = Vec::new();
+        tmp.axis_iter(Axis(1)).for_each(|col| {
+            let max = Self::max_argmax(col);
+            max_idx.push(max.0);
+            max1.push(max.1);
+        });
 
-        // np.fill_diagonal(v, -np.inf)
-        v.diag_mut().par_map_inplace(|c| *c = NEG_INF);
-        // println!("v1: {:?}", v);
+        let max_idx: Array1<usize> = max_idx.into();
+        let max1: Array1<Value> = max1.into();
 
-        // idx_max = np.argmax(v, axis=1)
-        // first_max = v[rows, idx_max]
-        let mut max: Vec<(usize, Value)> = Vec::new();
-        v.axis_iter(Axis(1))
-            .into_par_iter()
-            .map(|col| Self::max_argmax(col))
-            .collect_into_vec(&mut max);
-        let idx_max: Array1<usize> = max.iter().map(|t| t.0).collect::<Vec<usize>>().into();
-        let first_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
-        // println!("F: {:?}", first_max);
+        Zip::from(tmp.axis_iter_mut(Axis(1)))
+            .and(&max_idx)
+            .for_each(|mut t, &m| t[m] = NEG_INF);
 
-        // v[rows, idx_max] = -np.inf
-        Zip::from(v.axis_iter_mut(Axis(0)))
-            .and(&idx_max)
-            .par_for_each(|mut r, &idx| r[idx] = NEG_INF);
-        // println!("v2: {:?}", v);
+        let mut max2 = Vec::new();
+        tmp.axis_iter(Axis(1)).for_each(|col| {
+            let max = Self::max_argmax(col);
+            max2.push(max.1);
+        });
+        let max2: Array1<Value> = max2.into();
 
-        // second_max = v[rows, np.argmax(v, axis=1)]
-        let mut max: Vec<(usize, Value)> = Vec::new();
-        v.axis_iter(Axis(1))
-            .into_par_iter()
-            .map(|col| Self::max_argmax(col))
-            .collect_into_vec(&mut max);
-        let second_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
-        // println!("S: {:?}", second_max);
+        let mut tmp: Array2<Value> = &self.similarity - max1.insert_axis(Axis(1));
+        Zip::from(tmp.axis_iter_mut(Axis(0)))
+            .and(self.similarity.axis_iter(Axis(0)))
+            .and(&max_idx)
+            .and(&max2)
+            .for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
-        // max_matrix = np.zeros_like(R) + first_max[:, None]
-        let mut max_matrix: Array2<Value> =
-            Array2::<Value>::zeros(self.responsibility.dim()) + first_max.insert_axis(Axis(1));
-        // println!("M: {:?}", max_matrix);
-
-        // max_matrix[rows, idx_max] = second_max
-        Zip::from(max_matrix.axis_iter_mut(Axis(0)))
-            .and(&idx_max)
-            .and(&second_max)
-            .par_for_each(|mut r, &idx, &_max| {
-                if _max != NEG_INF {
-                    r[idx] = _max;
-                }
-            });
-        // println!("M2: {:?}", max_matrix);
-
-        // new_val = S - max_matrix
-        let mut new_val = Array2::<Value>::zeros(self.similarity.dim());
-        Zip::from(&mut new_val)
-            .and(&self.similarity)
-            .and(&max_matrix)
-            .par_for_each(|n, &s, &m| *n = s - m);
-
-        // R = R * damping + (1 - damping) * new_val
         let damping = self.config.damping;
         let inv_damping = 1. - damping;
-        Zip::from(&mut self.responsibility)
-            .and(&new_val)
-            .par_for_each(|r, &n| *r = *r * damping + inv_damping * n);
+        tmp.mapv_inplace(|v| v * inv_damping);
+        self.responsibility.mapv_inplace(|v| v * damping);
+        self.responsibility = &self.responsibility + tmp;
     }
 
     fn update_a(&mut self) {
-        let damping = self.config.damping;
-        // a = np.array(R)
-        let mut a = self.responsibility.clone();
-
-        // a[a < 0] = 0
-        a.par_mapv_inplace(|c| if c < 0. { 0. } else { c });
-
-        // np.fill_diagonal(a, 0)
-        a.diag_mut().par_map_inplace(|c| *c = 0.);
-
-        // a = a.sum(axis=0) # columnwise sum
-        // a = a + R[k_k_idx, k_k_idx]
-        let mut a = a.sum_axis(Axis(0));
-        Zip::from(&mut a)
+        let mut tmp = self.responsibility.clone();
+        tmp.mapv_inplace(|v| if v < 0. { 0. } else { v });
+        Zip::from(tmp.diag_mut())
             .and(self.responsibility.diag())
-            .par_for_each(|_a, &r| *_a = *_a + r);
+            .for_each(|t, &r| *t = r);
 
-        // a = np.ones(A.shape) * a
-        let mut a = Array2::<Value>::ones(self.availability.dim()) * a;
+        tmp = &tmp - tmp.sum_axis(Axis(0)).insert_axis(Axis(1));
+        let tmp_diag = tmp.diag().to_owned();
+        tmp.mapv_inplace(|v| if v < 0. { 0. } else { v });
+        Zip::from(tmp.diag_mut())
+            .and(&tmp_diag)
+            .for_each(|t, d| *t = *d);
 
-        // a -= np.clip(R, 0, np.inf)
-        Zip::from(&mut a)
-            .and(&self.responsibility)
-            .par_for_each(|_a, &r| {
-                let r = if r < 0. { 0. } else { r };
-                *_a -= r;
-            });
-
-        // a[a > 0] = 0
-        a.par_mapv_inplace(|c| if c > 0. { 0. } else { c });
-
-        // w = np.array(R)
-        // np.fill_diagonal(w, 0)
-        let mut w = self.responsibility.clone();
-        w.diag_mut().par_map_inplace(|d| *d = 0.);
-
-        // w[w < 0] = 0
-        w.par_mapv_inplace(|c| if c < 0. { 0. } else { c });
-
-        // a[k_k_idx, k_k_idx] = w.sum(axis=0) # column wise sum
-        Zip::from(a.diag_mut())
-            .and(&w.sum_axis(Axis(0)))
-            .par_for_each(|_a, &_w| *_a = _w);
-
-        // A = A * damping + (1 - damping) * a
+        let damping = self.config.damping;
         let inv_damping = 1. - damping;
-        Zip::from(&mut self.availability)
-            .and(&a)
-            .par_for_each(|av, &_a| *av = *av * damping + inv_damping * _a);
+        tmp.mapv_inplace(|v| v * inv_damping);
+        self.availability.mapv_inplace(|v| v * damping);
+        self.availability = &self.availability - tmp;
     }
 
     fn max_argmax(data: ArrayView<Value, Dim<[usize; 1]>>) -> (usize, Value) {

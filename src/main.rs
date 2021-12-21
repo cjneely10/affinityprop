@@ -18,7 +18,7 @@ fn main() {
         (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
         (@arg DAMPING: -d --damping +takes_value "Set damping value, default=0.9")
-        (@arg THREADS: -t --threads +takes_value "Set number of worker threads, default=4")
+        (@arg THREADS: -t --threads +takes_value "Set number of worker threads, default=1")
     )
     .get_matches();
 
@@ -45,7 +45,7 @@ fn main() {
         .unwrap();
     let threads = matches
         .value_of("THREADS")
-        .unwrap_or("4")
+        .unwrap_or("1")
         .parse::<usize>()
         .unwrap();
     if convergence_iter > max_iterations {
