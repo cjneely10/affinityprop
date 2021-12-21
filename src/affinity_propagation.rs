@@ -73,41 +73,43 @@ impl AffinityPropagation {
     {
         let x_dim = x.dim();
         assert_eq!(x_dim.0, y.len(), "`x` n_row != `y` length");
-        let mut ap = Self::new(s.similarity(x), y, cfg);
-        let mut conv_iterations = 0;
-        let mut final_sol = Array2::zeros(ap.availability.dim());
-        let mut final_exemplars = HashSet::new();
-        println!("Beginning clustering...");
-        for i in 0..cfg.max_iterations {
-            ap.update_r();
-            ap.update_a();
-            let sol = &ap.availability + &ap.responsibility;
-            if final_sol.abs_diff_eq(&sol, 1e-8) {
-                break;
-            } else {
-                let sol_map = Self::generate_exemplars(&sol);
-                if final_exemplars.len() == sol_map.len()
-                    && final_exemplars.iter().all(|k| sol_map.contains(k))
-                {
-                    conv_iterations += 1;
-                    if conv_iterations == ap.config.convergence_iter {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(cfg.threads)
+            .build()
+            .unwrap();
+        pool.scope(move |_| {
+            let mut ap = Self::new(s.similarity(x), y, cfg);
+            let mut final_sol = Array2::zeros(ap.availability.dim());
+            let mut final_exemplars = HashSet::new();
+            println!("Beginning clustering...");
+            for i in 0..cfg.max_iterations {
+                ap.update_r();
+                ap.update_a();
+                if i >= cfg.convergence_iter {
+                    let mut sol = Array2::zeros(ap.availability.dim());
+                    Zip::from(&mut sol)
+                        .and(&ap.availability)
+                        .and(&ap.responsibility)
+                        .par_for_each(|s, &a, &r| *s = a + r);
+                    let sol_map = Self::generate_exemplars(&sol);
+                    if final_exemplars.len() == sol_map.len()
+                        && final_exemplars.iter().all(|k| sol_map.contains(k))
+                    {
                         break;
                     }
-                } else {
-                    conv_iterations = 0;
+                    final_exemplars = sol_map;
+                    final_sol = sol;
+                    if (i + 1) % 100 == 0 {
+                        println!("Iter({}) nClusters: {}", i + 1, final_exemplars.len());
+                    }
                 }
-                final_exemplars = sol_map;
-                final_sol = sol;
             }
-            if (i + 1) % 100 == 0 {
-                println!("Iter({}) nClusters: {}", i + 1, final_exemplars.len());
-            }
-        }
-        let exemplars = Self::generate_exemplar_map(&final_sol)
-            .keys()
-            .map(|v| ap.labels.get(*v).unwrap())
-            .collect::<Vec<&String>>();
-        println!("nClusters: {}, nSamples: {}", exemplars.len(), x_dim.0);
+            let exemplars = Self::generate_exemplar_map(&final_sol)
+                .keys()
+                .map(|v| ap.labels.get(*v).unwrap())
+                .collect::<Vec<&String>>();
+            println!("nClusters: {}, nSamples: {}", exemplars.len(), x_dim.0);
+        });
     }
 
     fn generate_exemplars(sol: &Array2<Value>) -> HashSet<usize> {
@@ -144,11 +146,15 @@ impl AffinityPropagation {
 
     fn add_preference_to_sim(&mut self) {
         let pref = self.config.preference as Value;
-        self.similarity.diag_mut().map_inplace(|v| *v = pref);
+        self.similarity.diag_mut().par_map_inplace(|v| *v = pref);
     }
 
     fn update_r(&mut self) {
-        let mut tmp: Array2<Value> = &self.availability + &self.similarity;
+        let mut tmp: Array2<Value> = Array2::zeros(self.similarity.dim());
+        Zip::from(&mut tmp)
+            .and(&self.similarity)
+            .and(&self.availability)
+            .par_for_each(|t, &s, &a| *t = s + a);
 
         let mut max_idx = Vec::new();
         let mut max1 = Vec::new();
@@ -163,7 +169,7 @@ impl AffinityPropagation {
 
         Zip::from(tmp.axis_iter_mut(Axis(1)))
             .and(&max_idx)
-            .for_each(|mut t, &m| t[m] = NEG_INF);
+            .par_for_each(|mut t, &m| t[m] = NEG_INF);
 
         let mut max2 = Vec::new();
         tmp.axis_iter(Axis(1)).for_each(|col| {
@@ -173,38 +179,43 @@ impl AffinityPropagation {
         let max2: Array1<Value> = max2.into();
 
         let mut tmp: Array2<Value> = &self.similarity - max1.insert_axis(Axis(1));
+
         Zip::from(tmp.axis_iter_mut(Axis(0)))
             .and(self.similarity.axis_iter(Axis(0)))
             .and(&max_idx)
             .and(&max2)
-            .for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
+            .par_for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
         let damping = self.config.damping as Value;
         let inv_damping = (1. - damping) as Value;
-        tmp.mapv_inplace(|v| v * inv_damping);
-        self.responsibility.mapv_inplace(|v| v * damping);
-        self.responsibility = &self.responsibility + tmp;
+        tmp.par_mapv_inplace(|v| v * inv_damping);
+        self.responsibility.par_mapv_inplace(|v| v * damping);
+        Zip::from(&mut self.responsibility)
+            .and(&tmp)
+            .par_for_each(|r, &t| *r = *r + t);
     }
 
     fn update_a(&mut self) {
         let mut tmp = self.responsibility.clone();
-        tmp.mapv_inplace(|v| if v < 0. { 0. } else { v });
+        tmp.par_mapv_inplace(|v| if v < 0. { 0. } else { v });
         Zip::from(tmp.diag_mut())
             .and(self.responsibility.diag())
-            .for_each(|t, &r| *t = r);
+            .par_for_each(|t, &r| *t = r);
 
         tmp = &tmp - tmp.sum_axis(Axis(0)).insert_axis(Axis(1));
         let tmp_diag = tmp.diag().to_owned();
-        tmp.mapv_inplace(|v| if v < 0. { 0. } else { v });
+        tmp.par_mapv_inplace(|v| if v < 0. { 0. } else { v });
         Zip::from(tmp.diag_mut())
             .and(&tmp_diag)
-            .for_each(|t, d| *t = *d);
+            .par_for_each(|t, d| *t = *d);
 
         let damping = self.config.damping as Value;
         let inv_damping = (1. - damping) as Value;
-        tmp.mapv_inplace(|v| v * inv_damping);
-        self.availability.mapv_inplace(|v| v * damping);
-        self.availability = &self.availability - tmp;
+        tmp.par_mapv_inplace(|v| v * inv_damping);
+        self.availability.par_mapv_inplace(|v| v * damping);
+        Zip::from(&mut self.availability)
+            .and(&tmp)
+            .par_for_each(|a, &t| *a = *a - t);
     }
 
     fn max_argmax(data: ArrayView<Value, Dim<[usize; 1]>>) -> (usize, Value) {
