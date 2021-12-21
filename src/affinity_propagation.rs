@@ -85,10 +85,15 @@ impl AffinityPropagation {
             let mut conv_iterations = 0;
             let mut final_sol = Array2::zeros(ap.availability.dim());
             println!("Beginning clustering...");
+            // println!("{:?}", ap.similarity);
             for i in 0..cfg.max_iterations {
                 ap.update_r();
                 ap.update_a();
-                let sol = &ap.availability + &ap.responsibility;
+                let mut sol = Array2::zeros(ap.availability.dim());
+                Zip::from(&mut sol)
+                    .and(&ap.availability)
+                    .and(&ap.responsibility)
+                    .par_for_each(|s, &a, &r| *s = a + r);
                 if final_sol.abs_diff_eq(&sol, 1e-8) {
                     conv_iterations += 1;
                     if conv_iterations == ap.config.convergence_iter {
@@ -151,6 +156,7 @@ impl AffinityPropagation {
 
         // np.fill_diagonal(v, -np.inf)
         v.diag_mut().par_map_inplace(|c| *c = NEG_INF);
+        // println!("v1: {:?}", v);
 
         // idx_max = np.argmax(v, axis=1)
         // first_max = v[rows, idx_max]
@@ -161,11 +167,13 @@ impl AffinityPropagation {
             .collect_into_vec(&mut max);
         let idx_max: Array1<usize> = max.iter().map(|t| t.0).collect::<Vec<usize>>().into();
         let first_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
+        // println!("F: {:?}", first_max);
 
         // v[rows, idx_max] = -np.inf
         Zip::from(v.axis_iter_mut(Axis(0)))
             .and(&idx_max)
-            .par_for_each(|mut r, &idx| r.slice_mut(s![idx]).fill(NEG_INF));
+            .par_for_each(|mut r, &idx| r[idx] = NEG_INF);
+        // println!("v2: {:?}", v);
 
         // second_max = v[rows, np.argmax(v, axis=1)]
         let mut max: Vec<(usize, Value)> = Vec::new();
@@ -174,23 +182,30 @@ impl AffinityPropagation {
             .map(|col| Self::max_argmax(col))
             .collect_into_vec(&mut max);
         let second_max: Array1<Value> = max.iter().map(|t| t.1).collect::<Vec<Value>>().into();
+        // println!("S: {:?}", second_max);
 
         // max_matrix = np.zeros_like(R) + first_max[:, None]
         let mut max_matrix: Array2<Value> =
             Array2::<Value>::zeros(self.responsibility.dim()) + first_max.insert_axis(Axis(1));
+        // println!("M: {:?}", max_matrix);
 
         // max_matrix[rows, idx_max] = second_max
         Zip::from(max_matrix.axis_iter_mut(Axis(0)))
             .and(&idx_max)
             .and(&second_max)
-            .par_for_each(|mut r, &idx, &_max| r.slice_mut(s![idx]).fill(_max));
+            .par_for_each(|mut r, &idx, &_max| {
+                if _max != NEG_INF {
+                    r.slice_mut(s![idx]).fill(_max)
+                }
+            });
+        // println!("M2: {:?}", max_matrix);
 
         // new_val = S - max_matrix
         let mut new_val = Array2::<Value>::zeros(self.similarity.dim());
         Zip::from(&mut new_val)
             .and(&self.similarity)
             .and(&max_matrix)
-            .par_for_each(|n, &r, &m| *n = r - m);
+            .par_for_each(|n, &s, &m| *n = s - m);
 
         // R = R * damping + (1 - damping) * new_val
         let damping = self.config.damping;
@@ -255,15 +270,12 @@ impl AffinityPropagation {
     fn max_argmax(data: ArrayView<Value, Dim<[usize; 1]>>) -> (usize, Value) {
         let mut max_pos = 0;
         let mut max: Value = data[0];
-        data.iter()
-            .enumerate()
-            .map(|(idx, val)| {
-                if *val > max {
-                    max = *val;
-                    max_pos = idx;
-                }
-            })
-            .last();
+        data.iter().enumerate().for_each(|(idx, val)| {
+            if *val > max {
+                max = *val;
+                max_pos = idx;
+            }
+        });
         (max_pos, max)
     }
 }
@@ -276,8 +288,8 @@ mod test {
 
     #[test]
     fn init() {
-        let x: Array2<Value> = arr2(&[[1., 2., 3.], [4., 5., 6.]]);
-        let y = vec!["1".to_string(), "2".to_string()];
+        let x: Array2<Value> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+        let y = vec!["1".to_string(), "2".to_string(), "3".to_string()];
         AffinityPropagation::predict(x, y, Config::default(), Euclidean::default());
     }
 }

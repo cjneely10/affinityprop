@@ -14,18 +14,18 @@ fn main() {
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Set path to input file")
-        (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Set preference")
-        (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations")
-        (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations")
-        (@arg DAMPING: -d --damping +takes_value "Set damping value")
-        (@arg THREADS: -t --threads +takes_value "Set number of worker threads")
+        (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Set preference, default=-10.0")
+        (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
+        (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
+        (@arg DAMPING: -d --damping +takes_value "Set damping value, default=0.9")
+        (@arg THREADS: -t --threads +takes_value "Set number of worker threads, default=4")
     )
     .get_matches();
 
     let input_file = matches.value_of("INPUT").unwrap().to_string();
     let preference = matches
         .value_of("PREF")
-        .unwrap_or("-10.")
+        .unwrap_or("-10.0")
         .parse::<f32>()
         .unwrap();
     let mut max_iterations = matches
