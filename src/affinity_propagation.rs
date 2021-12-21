@@ -1,7 +1,5 @@
-use ndarray::{Array, Array1, Array2, ArrayView, Axis, Dim, Zip};
+use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use std::collections::{HashMap, HashSet};
-use ndarray_rand::rand_distr::Uniform;
-use ndarray_rand::RandomExt;
 
 pub type Value = f32;
 
@@ -55,8 +53,7 @@ impl Similarity for Euclidean {
     }
 }
 
-/// Implementation derived from:
-/// https://www.ritchievink.com/blog/2018/05/18/algorithm-breakdown-affinity-propagation/
+/// Implementation derived from sklearn AffinityPropagation implementation
 pub struct AffinityPropagation {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
@@ -81,7 +78,6 @@ impl AffinityPropagation {
         let mut final_sol = Array2::zeros(ap.availability.dim());
         let mut final_exemplars = HashSet::new();
         println!("Beginning clustering...");
-        // println!("{:?}", ap.similarity);
         for i in 0..cfg.max_iterations {
             ap.update_r();
             ap.update_a();
@@ -115,12 +111,9 @@ impl AffinityPropagation {
     }
 
     fn generate_exemplars(sol: &Array2<Value>) -> HashSet<usize> {
-        let mut exemplars = HashSet::new();
-        sol.axis_iter(Axis(1)).for_each(|col| {
-            let exemplar = Self::max_argmax(col);
-            exemplars.insert(exemplar.0);
-        });
-        exemplars
+        sol.axis_iter(Axis(1))
+            .map(|col| Self::max_argmax(col).0)
+            .collect()
     }
 
     fn generate_exemplar_map(sol: &Array2<Value>) -> HashMap<usize, Vec<usize>> {
@@ -150,10 +143,8 @@ impl AffinityPropagation {
     }
 
     fn add_preference_to_sim(&mut self) {
-        let pref = self.config.preference;
+        let pref = self.config.preference as Value;
         self.similarity.diag_mut().map_inplace(|v| *v = pref);
-        let dim = self.similarity.dim().0;
-        self.similarity = &self.similarity * Array::random((dim, dim), Uniform::new(0., 1.));
     }
 
     fn update_r(&mut self) {
@@ -188,8 +179,8 @@ impl AffinityPropagation {
             .and(&max2)
             .for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
-        let damping = self.config.damping;
-        let inv_damping = 1. - damping;
+        let damping = self.config.damping as Value;
+        let inv_damping = (1. - damping) as Value;
         tmp.mapv_inplace(|v| v * inv_damping);
         self.responsibility.mapv_inplace(|v| v * damping);
         self.responsibility = &self.responsibility + tmp;
@@ -209,8 +200,8 @@ impl AffinityPropagation {
             .and(&tmp_diag)
             .for_each(|t, d| *t = *d);
 
-        let damping = self.config.damping;
-        let inv_damping = 1. - damping;
+        let damping = self.config.damping as Value;
+        let inv_damping = (1. - damping) as Value;
         tmp.mapv_inplace(|v| v * inv_damping);
         self.availability.mapv_inplace(|v| v * damping);
         self.availability = &self.availability - tmp;
