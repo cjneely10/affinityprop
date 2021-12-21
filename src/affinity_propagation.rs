@@ -83,6 +83,7 @@ impl AffinityPropagation {
             let mut ap = Self::new(s.similarity(x), y, cfg);
             let mut conv_iterations = 0;
             let mut final_sol = Array2::zeros(ap.availability.dim());
+            let mut final_sol_map = HashMap::new();
             println!("Beginning clustering...");
             // println!("{:?}", ap.similarity);
             for i in 0..cfg.max_iterations {
@@ -94,27 +95,33 @@ impl AffinityPropagation {
                     .and(&ap.responsibility)
                     .par_for_each(|s, &a, &r| *s = a + r);
                 if final_sol.abs_diff_eq(&sol, 1e-8) {
-                    conv_iterations += 1;
-                    if conv_iterations == ap.config.convergence_iter {
-                        break;
-                    }
+                    break;
                 } else {
-                    conv_iterations = 0;
+                    let _sol = Self::generate_exemplar_map(&sol);
+                    if final_sol_map.len() == _sol.len() && final_sol_map.keys().all(|k| _sol.contains_key(k)) {
+                        conv_iterations += 1;
+                        if conv_iterations == ap.config.convergence_iter {
+                            break;
+                        }
+                    } else {
+                        conv_iterations = 0;
+                        final_sol_map = _sol;
+                        final_sol = sol;
+                    }
                 }
-                final_sol = sol;
                 if (i + 1) % 100 == 0 {
-                    println!("Iter({})", i + 1);
+                    println!("Iter({}) nClusters: {}", i + 1, final_sol_map.len());
                 }
             }
-            let final_sol = Self::generate_exemplar_map(final_sol)
+            let exemplars = final_sol_map
                 .keys()
                 .map(|v| ap.labels.get(*v).unwrap())
                 .collect::<Vec<&String>>();
-            println!("nClusters: {}, nSamples: {}", final_sol.len(), x_dim.0);
+            println!("nClusters: {}, nSamples: {}", final_sol_map.len(), x_dim.0);
         });
     }
 
-    fn generate_exemplar_map(sol: Array2<Value>) -> HashMap<usize, Vec<usize>> {
+    fn generate_exemplar_map(sol: &Array2<Value>) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::new();
         sol.axis_iter(Axis(1)).enumerate().for_each(|(idx, col)| {
             let exemplar = AffinityPropagation::max_argmax(col);
