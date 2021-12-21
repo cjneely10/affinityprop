@@ -1,5 +1,5 @@
 use ndarray::parallel::prelude::*;
-use ndarray::{s, Array1, Array2, ArrayView, Axis, Dim, Zip};
+use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use std::collections::HashMap;
 
 pub type Value = f32;
@@ -21,7 +21,7 @@ impl Default for Config {
             damping: 0.5,
             preference: -10.,
             threads: 4,
-            max_iterations: 10,
+            max_iterations: 100,
             convergence_iter: 3,
         }
     }
@@ -75,13 +75,12 @@ impl AffinityPropagation {
     {
         let x_dim = x.dim();
         assert_eq!(x_dim.0, y.len(), "`x` n_row != `y` length");
-        let mut ap = Self::new(s.similarity(x), y, cfg);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cfg.threads)
             .build()
             .unwrap();
         pool.scope(move |_| {
-            ap.add_preference_to_sim();
+            let mut ap = Self::new(s.similarity(x), y, cfg);
             let mut conv_iterations = 0;
             let mut final_sol = Array2::zeros(ap.availability.dim());
             println!("Beginning clustering...");
@@ -130,13 +129,15 @@ impl AffinityPropagation {
 
     fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
         let x_dim_0 = x.dim();
-        Self {
+        let mut ap = Self {
             similarity: x,
             responsibility: Array2::zeros(x_dim_0),
             availability: Array2::zeros(x_dim_0),
             config: cfg,
             labels: y,
-        }
+        };
+        ap.add_preference_to_sim();
+        ap
     }
 
     fn add_preference_to_sim(&mut self) {
@@ -195,7 +196,7 @@ impl AffinityPropagation {
             .and(&second_max)
             .par_for_each(|mut r, &idx, &_max| {
                 if _max != NEG_INF {
-                    r.slice_mut(s![idx]).fill(_max)
+                    r[idx] = _max;
                 }
             });
         // println!("M2: {:?}", max_matrix);
