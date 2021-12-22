@@ -45,9 +45,13 @@ impl Similarity for Euclidean {
         let mut out = Array2::<Value>::zeros((x_dim.0, x_dim.0));
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
             x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
-                let mut row_diff = &row1 - &row2;
-                row_diff.map_inplace(|a| *a = (*a).powi(2));
-                out[[idx1, idx2]] = -1. * row_diff.sum();
+                if idx2 > idx1 {
+                    let mut row_diff = &row1 - &row2;
+                    row_diff.map_inplace(|a| *a = (*a).powi(2));
+                    out[[idx1, idx2]] = -1. * row_diff.sum();
+                } else {
+                    out[[idx1, idx2]] = out[[idx2, idx1]];
+                }
             });
         });
         out
