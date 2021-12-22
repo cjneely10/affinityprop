@@ -142,7 +142,7 @@ impl AffinityPropagation {
 
     fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
         let x_dim_0 = x.dim();
-        assert_eq!(x_dim_0.0, x_dim_0.1, "xdim must be NxN");
+        assert_eq!(x_dim_0.0, x_dim_0.1, "similarity dim must be NxN");
         let mut ap = Self {
             similarity: x,
             responsibility: Array2::zeros(x_dim_0),
