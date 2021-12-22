@@ -62,6 +62,7 @@ impl Similarity for Euclidean {
 }
 
 /// Implementation derived from sklearn AffinityPropagation implementation
+/// https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L432
 pub struct AffinityPropagation {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
