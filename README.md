@@ -18,7 +18,7 @@ git clone git@github.com:cjneely10/affinityprop.git
 cd affinityprop
 ```
 
-Increase precision by changing line 9 of the `Cargo.toml` file from `f32` to `f64`. 
+If desired, increase precision by changing line 9 of the `Cargo.toml` file from `f32` to `f64`. 
 
 Compile using `cargo`:
 
