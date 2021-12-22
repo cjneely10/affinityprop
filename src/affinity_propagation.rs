@@ -107,7 +107,7 @@ impl AffinityPropagation {
             }
             let exemplar_map = ap.generate_exemplar_map();
             println!(
-                "Converged={}, nClusters={}, nSamples={}",
+                "Converged={} nClusters={} nSamples={}",
                 converged,
                 exemplar_map.len(),
                 x_dim_0
@@ -117,12 +117,19 @@ impl AffinityPropagation {
                 .enumerate()
                 .for_each(|(idx, (key, value))| {
                     println!(
-                        ">Cluster={}, size={}, exemplar={}",
+                        ">Cluster={} size={} exemplar={}",
                         idx + 1,
                         value.len(),
                         y[key]
                     );
-                    // println!("{}", value.into_iter().map(|v| y[v].clone()).collect::<Vec<String>>().join(","));
+                    println!(
+                        "{}",
+                        value
+                            .into_iter()
+                            .map(|v| y[v].clone())
+                            .collect::<Vec<String>>()
+                            .join(" ")
+                    );
                 });
         });
     }
