@@ -63,7 +63,7 @@ ID2  val3  val4
 
 where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
 
-We have provided an example file in the `tests` directory:
+We have provided an example file in the `test` directory:
 
 ```shell
 ./target/release/affinityprop -i ./test/Infant_gut_assembly.cov.x100.lognorm -c 400 -m 4000 -p -10.0 -d 0.95 -t 16 > ./test/output-file.txt
