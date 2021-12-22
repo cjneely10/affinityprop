@@ -6,7 +6,7 @@ Vectorized and Parallelized Affinity Propagation
 `affinityprop` provides a command-line accessible interface for running the Affinity Propagation
 clustering algorithm.
 
-The implementation largely mimics the [sklearn version](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AffinityPropagation.html#sklearn.cluster.AffinityPropagation.fit_predict),
+The implementation largely mimics the [sklearn version](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AffinityPropagation.html),
 but has been implemented in Rust using the `rayon` and `ndarray` packages to allow for parallel iteration.
 
 ## Installation
