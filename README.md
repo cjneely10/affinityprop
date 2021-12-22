@@ -75,3 +75,8 @@ Converged=true/false nClusters=NC nSamples=NS
 [comma-separated cluster members]
 ...
 ```
+
+### Notes
+
+Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory. 
+This package seeks to address the former, not the latter. 
