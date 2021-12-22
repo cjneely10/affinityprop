@@ -1,6 +1,7 @@
 use crate::affinity_propagation::{AffinityPropagation, Config, Euclidean};
 use crate::ops::from_file;
 use std::path::Path;
+use std::process::exit;
 
 mod affinity_propagation;
 mod ops;
@@ -23,33 +24,41 @@ fn main() {
     .get_matches();
 
     let input_file = matches.value_of("INPUT").unwrap().to_string();
+    if !Path::new(&input_file).exists() {
+        eprintln!("Unable to locate input file {}", input_file);
+        exit(1);
+    }
     let preference = matches
         .value_of("PREF")
         .unwrap_or("-10.0")
         .parse::<f32>()
-        .unwrap();
+        .expect("Unable to parse preference");
     let mut max_iterations = matches
         .value_of("MAX_ITER")
         .unwrap_or("100")
         .parse::<usize>()
-        .unwrap();
+        .expect("Unable to parse max_iterations");
     let convergence_iter = matches
         .value_of("CONV_ITER")
         .unwrap_or("10")
         .parse::<usize>()
-        .unwrap();
+        .expect("Unable to parse convergence_iter");
     let damping = matches
         .value_of("DAMPING")
         .unwrap_or("0.9")
         .parse::<f32>()
-        .unwrap();
+        .expect("Unable to parse damping");
     let threads = matches
         .value_of("THREADS")
         .unwrap_or("4")
         .parse::<usize>()
-        .unwrap();
+        .expect("Unable to parse threads");
+    if threads < 1 || (damping < 0. || damping > 1.) || convergence_iter < 1 || max_iterations < 1 {
+        eprintln!("Improper parameter set!");
+        exit(2);
+    }
     if convergence_iter > max_iterations {
-        max_iterations = convergence_iter;
+        max_iterations = convergence_iter * 2;
     }
     let (x, y) = from_file(Path::new(&input_file).to_path_buf());
     let cfg = Config {

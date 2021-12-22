@@ -17,9 +17,9 @@ pub(crate) fn from_file(p: PathBuf) -> (Array2<Value>, Vec<String>) {
     let mut data = Vec::new();
     reader.lines().map(|l| l.unwrap()).for_each(|line| {
         let mut line = line.split('\t');
-        labels.push(line.next().unwrap().to_string());
+        labels.push(line.next().expect("Error loading line label").to_string());
         data.push(
-            line.map(|s| s.parse::<Value>().unwrap())
+            line.map(|s| s.parse::<Value>().expect("Error parsing data in file"))
                 .collect::<Vec<Value>>(),
         );
     });
