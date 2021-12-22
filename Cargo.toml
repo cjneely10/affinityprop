@@ -5,6 +5,11 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["f32"]
+f32 = []
+f64 = []
+
 [dependencies]
 ndarray = { version = "0.15.4", features = ["rayon"] }
 rayon = "1.5"

@@ -11,9 +11,18 @@ but has been implemented in Rust using the `rayon` and `ndarray` packages to all
 
 ## Installation
 
+Download this repository
+
 ```shell
 git clone git@github.com:cjneely10/affinityprop.git
 cd affinityprop
+```
+
+Increase precision by changing line 9 of the `Cargo.toml` file from `f32` to `f64`. 
+
+Compile using `cargo`:
+
+```shell
 cargo build --release
 ```
 

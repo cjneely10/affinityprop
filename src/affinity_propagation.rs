@@ -2,7 +2,12 @@ use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
+use std::marker::Send;
 
+#[cfg(feature = "f64")]
+pub type Value = f64;
+
+#[cfg(feature = "f32")]
 pub type Value = f32;
 
 const NEG_INF: Value = (-1. as Value) * Value::INFINITY;
@@ -78,7 +83,7 @@ impl AffinityPropagation {
     /// - s: Similarity calculator -> must generate an N x N matrix
     pub fn predict<S>(x: Array2<Value>, y: Vec<String>, cfg: Config, s: S)
     where
-        S: Similarity + std::marker::Send,
+        S: Similarity + Send,
     {
         let x_dim_0 = x.dim().0;
         assert_eq!(x_dim_0, y.len(), "`x` n_row != `y` length");
