@@ -94,8 +94,6 @@ impl AffinityPropagation {
                 ap.update_a();
             }
             for _ in cfg.convergence_iter..cfg.max_iterations {
-                ap.update_r();
-                ap.update_a();
                 let mut sol = Array2::zeros(ap.availability.dim());
                 Zip::from(&mut sol)
                     .and(&ap.availability)
@@ -109,6 +107,8 @@ impl AffinityPropagation {
                 }
                 final_exemplars = sol_map;
                 final_sol = sol;
+                ap.update_r();
+                ap.update_a();
             }
             let exemplars = Self::generate_exemplar_map(&final_sol)
                 .keys()
