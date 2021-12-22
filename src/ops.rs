@@ -15,14 +15,28 @@ pub(crate) fn from_file(p: PathBuf) -> (Array2<Value>, Vec<String>) {
     let reader = BufReader::new(File::open(p).unwrap());
     let mut labels = Vec::new();
     let mut data = Vec::new();
+    // Read tab-delimited file
     reader.lines().map(|l| l.unwrap()).for_each(|line| {
         let mut line = line.split('\t');
+        // ID as first col
         labels.push(line.next().expect("Error loading line label").to_string());
+        // Rest are data
         data.push(
             line.map(|s| s.parse::<Value>().expect("Error parsing data in file"))
                 .collect::<Vec<Value>>(),
         );
     });
+    // Validate data was loaded
+    assert!(
+        data.len() > 1,
+        "Data file is empty or only contains a single entry"
+    );
+    // Validate data all has same length
+    let length = data[0].len();
+    data.iter().skip(1).for_each(|v| {
+        assert_eq!(v.len(), length, "Input data rows must all be same length!");
+    });
+    // Convert data to Array2
     let mut out = Array2::<Value>::default((data.len(), data[0].len()));
     out.axis_iter_mut(Axis(0))
         .enumerate()

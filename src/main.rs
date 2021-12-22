@@ -1,4 +1,4 @@
-use crate::affinity_propagation::{AffinityPropagation, Config, Euclidean};
+use crate::affinity_propagation::{AffinityPropagation, Config, Euclidean, Value};
 use crate::ops::from_file;
 use std::path::Path;
 use std::process::exit;
@@ -10,16 +10,16 @@ mod ops;
 extern crate clap;
 
 fn main() {
-    let matches = clap_app!(myapp =>
+    let matches = clap_app!(affinityprop =>
         (version: "0.1.0")
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
-        (@arg INPUT: -i --input +takes_value +required "Set path to input file")
-        (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Set preference, default=-10.0")
+        (@arg INPUT: -i --input +takes_value +required "Path to input file")
+        (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Preference, default=-10.0")
         (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
-        (@arg DAMPING: -d --damping +takes_value "Set damping value, default=0.9")
-        (@arg THREADS: -t --threads +takes_value "Set number of worker threads, default=4")
+        (@arg DAMPING: -d --damping +takes_value "Damping value, default=0.9")
+        (@arg THREADS: -t --threads +takes_value "Number of worker threads, default=4")
     )
     .get_matches();
 
@@ -31,7 +31,7 @@ fn main() {
     let preference = matches
         .value_of("PREF")
         .unwrap_or("-10.0")
-        .parse::<f32>()
+        .parse::<Value>()
         .expect("Unable to parse preference");
     let mut max_iterations = matches
         .value_of("MAX_ITER")
@@ -46,13 +46,14 @@ fn main() {
     let damping = matches
         .value_of("DAMPING")
         .unwrap_or("0.9")
-        .parse::<f32>()
+        .parse::<Value>()
         .expect("Unable to parse damping");
     let threads = matches
         .value_of("THREADS")
         .unwrap_or("4")
         .parse::<usize>()
         .expect("Unable to parse threads");
+    // Validate values
     if threads < 1 || (damping < 0. || damping > 1.) || convergence_iter < 1 || max_iterations < 1 {
         eprintln!("Improper parameter set!");
         exit(2);
@@ -61,6 +62,8 @@ fn main() {
         max_iterations = convergence_iter * 2;
     }
     let (x, y) = from_file(Path::new(&input_file).to_path_buf());
+
+    // Run AP
     let cfg = Config {
         preference,
         max_iterations,
