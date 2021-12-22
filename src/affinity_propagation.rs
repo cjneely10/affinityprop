@@ -68,6 +68,7 @@ impl AffinityPropagation {
     /// - x: 2-D array of (rows=samples, cols=attr_values)
     /// - y: 1-D array of label values attached to each row in `x`
     /// - cfg: Prediction configurations
+    /// - s: Similarity calculator -> must generate an N x N matrix
     pub fn predict<S>(x: Array2<Value>, y: Vec<String>, cfg: Config, s: S)
     where
         S: Similarity + std::marker::Send,
@@ -139,6 +140,7 @@ impl AffinityPropagation {
 
     fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
         let x_dim_0 = x.dim();
+        assert_eq!(x_dim_0.0, x_dim_0.1, "xdim must be NxN");
         let mut ap = Self {
             similarity: x,
             responsibility: Array2::zeros(x_dim_0),
