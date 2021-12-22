@@ -162,15 +162,8 @@ impl AffinityPropagation {
             .and(&self.availability)
             .par_for_each(|t, &s, &a| *t = s + a);
 
-        // let mut max_idx = Vec::new();
-        // let mut max1 = Vec::new();
-        let combined = Zip::from(tmp.axis_iter(Axis(1)))
-            .par_map_collect(|col| Self::max_argmax(col));
-        // tmp.axis_iter(Axis(1)).for_each(|col| {
-        //     let max = Self::max_argmax(col);
-        //     max_idx.push(max.0);
-        //     max1.push(max.1);
-        // });
+        let combined =
+            Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col));
 
         let max_idx: Array1<usize> = combined.iter().map(|c| c.0).collect();
         let max1: Array1<Value> = combined.iter().map(|c| c.1).collect();
