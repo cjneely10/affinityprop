@@ -129,7 +129,7 @@ impl AffinityPropagation {
                             .into_iter()
                             .map(|v| y[v].clone())
                             .collect::<Vec<String>>()
-                            .join(" ")
+                            .join(",")
                     );
                 });
         });

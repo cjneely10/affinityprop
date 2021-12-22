@@ -21,7 +21,7 @@ The program binary will be present in the `target/release` directory.
 
 ## Usage
 
-```shell
+```text
 affinityprop 0.1.0
 Chris N. <christopher.neely1200@gmail.com>
 Vectorized and Parallelized Affinity Propagation
@@ -62,10 +62,13 @@ We have provided an example file in the `tests` directory:
 
 ### Results
 
+Increasing thread count can see up to a 3x speed increase.
+
 Results are printed to stdout in the format:
 
 ```text
-Config{ ... }
+Config { ... }
+Converged=true/false nClusters=NC nSamples=NS
 >Cluster=n size=N exemplar=i
 [comma-separated cluster members]
 >Cluster=n size=N exemplar=i
