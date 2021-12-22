@@ -119,8 +119,8 @@ impl AffinityPropagation {
         HashSet::from_iter(
             Zip::from(sol.axis_iter(Axis(1)))
                 .par_map_collect(|col| Self::max_argmax(col).0)
-                .iter()
-                .map(|v| v.clone()),
+                .into_iter()
+                .map(|v| v),
         )
     }
 
