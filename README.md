@@ -62,7 +62,8 @@ We have provided an example file in the `tests` directory:
 
 ### Results
 
-Increasing thread count can see up to a 3x speed increase.
+Increasing thread count can see up to a 3x speed increase for 32-bit floating point precision,
+and around a 20-30% increase in 64-bit mode.
 
 Results are printed to stdout in the format:
 
