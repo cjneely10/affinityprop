@@ -63,7 +63,6 @@ pub struct AffinityPropagation {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
     availability: Array2<Value>,
-    labels: Vec<String>,
     config: Config,
 }
 
@@ -85,7 +84,7 @@ impl AffinityPropagation {
             .unwrap();
         pool.scope(move |_| {
             println!("Determining similarity...");
-            let mut ap = Self::new(s.similarity(x), y, cfg);
+            let mut ap = Self::new(s.similarity(x), cfg);
             let mut final_sol = Array2::zeros(ap.availability.dim());
             let mut final_exemplars = HashSet::new();
             println!("Beginning clustering...");
@@ -110,11 +109,20 @@ impl AffinityPropagation {
                 ap.update_r();
                 ap.update_a();
             }
-            let exemplars = Self::generate_exemplar_map(&final_sol)
-                .keys()
-                .map(|v| ap.labels.get(*v).unwrap())
-                .collect::<Vec<&String>>();
-            println!("nClusters: {}, nSamples: {}", exemplars.len(), x_dim.0);
+            let exemplar_map = Self::generate_exemplar_map(&final_sol);
+            let num_samples = exemplar_map.len();
+            exemplar_map
+                .into_iter()
+                .enumerate()
+                .for_each(|(idx, (key, value))| {
+                    println!(
+                        "Cluster({}): size={}, exemplar={}",
+                        idx + 1,
+                        value.len(),
+                        y[key]
+                    );
+                });
+            println!("nClusters: {}, nSamples: {}", num_samples, x_dim.0);
         });
     }
 
@@ -140,7 +148,7 @@ impl AffinityPropagation {
         exemplar_map
     }
 
-    fn new(x: Array2<Value>, y: Vec<String>, cfg: Config) -> Self {
+    fn new(x: Array2<Value>, cfg: Config) -> Self {
         let x_dim_0 = x.dim();
         assert_eq!(x_dim_0.0, x_dim_0.1, "similarity dim must be NxN");
         let mut ap = Self {
@@ -148,7 +156,6 @@ impl AffinityPropagation {
             responsibility: Array2::zeros(x_dim_0),
             availability: Array2::zeros(x_dim_0),
             config: cfg,
-            labels: y,
         };
         ap.add_preference_to_sim();
         ap
