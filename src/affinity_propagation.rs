@@ -84,6 +84,7 @@ impl AffinityPropagation {
             .build()
             .unwrap();
         pool.scope(move |_| {
+            println!("Determining similarity...");
             let mut ap = Self::new(s.similarity(x), y, cfg);
             let mut final_sol = Array2::zeros(ap.availability.dim());
             let mut final_exemplars = HashSet::new();
@@ -92,7 +93,7 @@ impl AffinityPropagation {
                 ap.update_r();
                 ap.update_a();
             }
-            for i in cfg.convergence_iter..cfg.max_iterations {
+            for _ in cfg.convergence_iter..cfg.max_iterations {
                 ap.update_r();
                 ap.update_a();
                 let mut sol = Array2::zeros(ap.availability.dim());
@@ -108,9 +109,6 @@ impl AffinityPropagation {
                 }
                 final_exemplars = sol_map;
                 final_sol = sol;
-                if (i + 1) % 100 == 0 {
-                    println!("Iter({}) nClusters: {}", i + 1, final_exemplars.len());
-                }
             }
             let exemplars = Self::generate_exemplar_map(&final_sol)
                 .keys()
