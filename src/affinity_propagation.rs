@@ -85,8 +85,7 @@ impl AffinityPropagation {
     where
         S: Similarity + Send,
     {
-        let x_dim_0 = x.dim().0;
-        assert_eq!(x_dim_0, y.len(), "`x` n_row != `y` length");
+        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cfg.threads)
             .build()
@@ -111,33 +110,37 @@ impl AffinityPropagation {
                 }
                 final_exemplars = sol_map;
             }
-            let exemplar_map = ap.generate_exemplar_map();
-            println!(
-                "Converged={} nClusters={} nSamples={}",
-                converged,
-                exemplar_map.len(),
-                x_dim_0
-            );
-            exemplar_map
-                .into_iter()
-                .enumerate()
-                .for_each(|(idx, (key, value))| {
-                    println!(
-                        ">Cluster={} size={} exemplar={}",
-                        idx + 1,
-                        value.len(),
-                        y[key]
-                    );
-                    println!(
-                        "{}",
-                        value
-                            .into_iter()
-                            .map(|v| y[v].clone())
-                            .collect::<Vec<String>>()
-                            .join(",")
-                    );
-                });
+            ap.display_results(converged, final_exemplars, y);
         });
+    }
+
+    fn display_results(&self, converged: bool, final_exemplars: HashSet<usize>, y: Vec<String>) {
+        let exemplar_map = self.generate_exemplar_map(final_exemplars);
+        println!(
+            "Converged={} nClusters={} nSamples={}",
+            converged,
+            exemplar_map.len(),
+            self.similarity.dim().0
+        );
+        exemplar_map
+            .into_iter()
+            .enumerate()
+            .for_each(|(idx, (key, value))| {
+                println!(
+                    ">Cluster={} size={} exemplar={}",
+                    idx + 1,
+                    value.len(),
+                    y[key]
+                );
+                println!(
+                    "{}",
+                    value
+                        .into_iter()
+                        .map(|v| y[v].clone())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                );
+            });
     }
 
     fn generate_exemplars(&self) -> HashSet<usize> {
@@ -161,9 +164,8 @@ impl AffinityPropagation {
         HashSet::from_iter(values.into_iter())
     }
 
-    fn generate_exemplar_map(&self) -> HashMap<usize, Vec<usize>> {
-        let mut exemplar_map =
-            HashMap::from_iter(self.generate_exemplars().into_iter().map(|x| (x, vec![])));
+    fn generate_exemplar_map(&self, sol_map: HashSet<usize>) -> HashMap<usize, Vec<usize>> {
+        let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, vec![])));
         let idx = Array1::range(0., self.similarity.dim().0 as Value, 1.);
         let max_results = Zip::from(&idx)
             .and(self.similarity.axis_iter(Axis(1)))
