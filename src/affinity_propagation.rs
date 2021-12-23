@@ -170,8 +170,9 @@ impl AffinityPropagation {
         let max_results = Zip::from(&idx)
             .and(self.similarity.axis_iter(Axis(1)))
             .par_map_collect(|&i, col| {
-                if exemplar_map.contains_key(&(i as usize)) {
-                    return (i as usize, i as usize);
+                let i = i as usize;
+                if exemplar_map.contains_key(&i) {
+                    return (i, i);
                 }
                 // Collect into (idx, value)
                 let mut col_data: Vec<(usize, Value)> =
@@ -181,10 +182,10 @@ impl AffinityPropagation {
                 // Return highest value that is present in exemplar map keys
                 for v in col_data.iter() {
                     if exemplar_map.contains_key(&v.0) {
-                        return (v.0, i as usize);
+                        return (v.0, i);
                     }
                 }
-                return (col_data[0].0, i as usize);
+                return (col_data[0].0, i);
             });
         max_results
             .into_iter()
