@@ -1,7 +1,6 @@
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{HashMap, HashSet};
-use std::iter::FromIterator;
 use std::marker::Send;
 
 #[cfg(feature = "f64")]
