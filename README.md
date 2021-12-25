@@ -18,17 +18,31 @@ git clone git@github.com:cjneely10/affinityprop.git
 cd affinityprop
 ```
 
-If desired, increase precision by changing line 9 of the `Cargo.toml` file from `f32` to `f64`. 
+If desired, increase precision by changing line 9 of the `Cargo.toml` file from `f32` to `f64`.
 
-Compile using `cargo`:
+The program binary will be present in the `target/release` directory.
+
+## Usage
+
+Run the binary using either Rust's package manager:
+
+```shell
+cargo run --release --bin affinityprop -- -h
+```
+
+Or, compile using `cargo`:
 
 ```shell
 cargo build --release
 ```
 
-The program binary will be present in the `target/release` directory.
+And then run directly:
 
-## Usage
+```shell
+./target/release/affinityprop -h
+```
+
+### Help menu
 
 ```text
 affinityprop 0.1.0
@@ -51,7 +65,7 @@ OPTIONS:
     -t, --threads <THREADS>               Number of worker threads, default=4
 ```
 
-## Example
+### Command-line input data
 
 Provide a **tab-separated** file in the format:
 
@@ -63,10 +77,18 @@ ID2  val3  val4
 
 where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
 
-We have provided an example file in the `test` directory:
+## Example
+
+We have provided an example file in the `data` directory:
 
 ```shell
-./target/release/affinityprop -i ./tests/Infant_gut_assembly.cov.x100.lognorm -c 400 -m 4000 -p -10.0 -d 0.95 -t 16 > ./tests/output-file.txt
+./target/release/affinityprop -i ./data/Infant_gut_assembly.cov.x100.lognorm -c 400 -m 4000 -p -10.0 -d 0.95 -t 16 > output-file.txt
+```
+
+-or-
+
+```shell
+cargo run --release --bin affinityprop -- -i ./data/Infant_gut_assembly.cov.x100.lognorm -c 400 -m 4000 -p -10.0 -d 0.95 -t 16 > output-file.txt
 ```
 
 ### Results
