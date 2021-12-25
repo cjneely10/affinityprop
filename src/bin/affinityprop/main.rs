@@ -71,5 +71,6 @@ fn main() {
         threads,
     };
     println!("{:?}", cfg);
-    AffinityPropagation::predict(x, y, cfg, Euclidean::default());
+    let mut ap = AffinityPropagation::new(x, &y, cfg, Euclidean::default(), false);
+    ap.predict();
 }

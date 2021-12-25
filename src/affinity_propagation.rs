@@ -1,7 +1,7 @@
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{HashMap, HashSet};
-use std::marker::Send;
+use std::fmt::{Debug, Display};
 
 #[cfg(feature = "f64")]
 pub type Value = f64;
@@ -26,14 +26,15 @@ impl Default for Config {
             damping: 0.5,
             preference: -10.,
             threads: 4,
-            max_iterations: 1000,
-            convergence_iter: 100,
+            max_iterations: 100,
+            convergence_iter: 10,
         }
     }
 }
 
 pub trait Similarity {
-    fn similarity(self, x: Array2<Value>) -> Array2<Value>;
+    type Type;
+    fn similarity(self, x: Array2<Self::Type>) -> Array2<Value>;
 }
 
 pub struct Euclidean;
@@ -45,8 +46,10 @@ impl Default for Euclidean {
 }
 
 impl Similarity for Euclidean {
+    type Type = Value;
+
     /// Row-by-row similarity calculation using negative euclidean distance
-    fn similarity(self, x: Array2<Value>) -> Array2<Value> {
+    fn similarity(self, x: Array2<Self::Type>) -> Array2<Value> {
         let x_dim = x.dim();
         let mut out = Array2::<Value>::zeros((x_dim.0, x_dim.0));
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
@@ -66,41 +69,63 @@ impl Similarity for Euclidean {
 }
 
 /// Implementation derived from sklearn AffinityPropagation implementation
-/// https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L432
-pub struct AffinityPropagation {
+/// https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38
+pub struct AffinityPropagation<L> {
     similarity: Array2<Value>,
     responsibility: Array2<Value>,
     availability: Array2<Value>,
+    labels: Vec<L>,
+    exemplar_map: HashMap<usize, Vec<usize>>,
+    verbose: bool,
     config: Config,
 }
 
-impl AffinityPropagation {
+impl<L> AffinityPropagation<L>
+where
+    L: Display + Send + Clone + ToString,
+{
+    pub fn new<S>(x: Array2<S::Type>, y: &[L], cfg: Config, s: S, verbose: bool) -> Self
+    where
+        S: Similarity,
+    {
+        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
+        let s = s.similarity(x);
+        let s_dim_0 = s.dim();
+        assert_eq!(s_dim_0.0, y.len(), "similarity dim must be NxN");
+        let mut ap = Self {
+            similarity: s,
+            responsibility: Array2::zeros(s_dim_0),
+            availability: Array2::zeros(s_dim_0),
+            config: cfg,
+            exemplar_map: HashMap::new(),
+            labels: y.into_iter().map(|l| l.clone()).collect(),
+            verbose,
+        };
+        ap.add_preference_to_sim();
+        ap
+    }
+
     /// Generate cluster predictions for set of `x` values and `y` labels
     /// - x: 2-D array of (rows=samples, cols=attr_values)
     /// - y: 1-D array of label values attached to each row in `x`
     /// - cfg: Prediction configurations
     /// - s: Similarity calculator -> must generate an N x N matrix
-    pub fn predict<S>(x: Array2<Value>, y: Vec<String>, cfg: Config, s: S)
-    where
-        S: Similarity + Send,
-    {
-        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
+    pub fn predict(&mut self) {
         let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(cfg.threads)
+            .num_threads(self.config.threads)
             .build()
             .unwrap();
         pool.scope(move |_| {
-            let mut ap = Self::new(s.similarity(x), cfg);
             let mut converged: bool = false;
-            for _ in 0..cfg.convergence_iter {
-                ap.update_r();
-                ap.update_a();
+            for _ in 0..self.config.convergence_iter {
+                self.update_r();
+                self.update_a();
             }
-            let mut final_exemplars = ap.generate_exemplars();
-            for _ in cfg.convergence_iter..cfg.max_iterations {
-                ap.update_r();
-                ap.update_a();
-                let sol_map = ap.generate_exemplars();
+            let mut final_exemplars = self.generate_exemplars();
+            for _ in self.config.convergence_iter..self.config.max_iterations {
+                self.update_r();
+                self.update_a();
+                let sol_map = self.generate_exemplars();
                 if final_exemplars.len() == sol_map.len()
                     && final_exemplars.iter().all(|k| sol_map.contains(k))
                 {
@@ -109,33 +134,41 @@ impl AffinityPropagation {
                 }
                 final_exemplars = sol_map;
             }
-            ap.display_results(converged, final_exemplars, y);
+            self.display_results(converged, final_exemplars);
         });
     }
 
-    fn display_results(&self, converged: bool, final_exemplars: HashSet<usize>, y: Vec<String>) {
+    pub fn results(&self) -> &HashMap<usize, Vec<usize>> {
+        &self.exemplar_map
+    }
+
+    fn display_results(&mut self, converged: bool, final_exemplars: HashSet<usize>) {
         let exemplar_map = self.generate_exemplar_map(final_exemplars);
+        self.exemplar_map = exemplar_map;
+        if !self.verbose {
+            return;
+        }
         println!(
             "Converged={} nClusters={} nSamples={}",
             converged,
-            exemplar_map.len(),
+            self.exemplar_map.len(),
             self.similarity.dim().0
         );
-        exemplar_map
-            .into_iter()
+        self.exemplar_map
+            .iter()
             .enumerate()
             .for_each(|(idx, (key, value))| {
                 println!(
                     ">Cluster={} size={} exemplar={}",
                     idx + 1,
                     value.len(),
-                    y[key]
+                    self.labels[*key]
                 );
                 println!(
                     "{}",
                     value
-                        .into_iter()
-                        .map(|v| y[v].clone())
+                        .iter()
+                        .map(|v| self.labels[*v].to_string())
                         .collect::<Vec<String>>()
                         .join(",")
                 );
@@ -190,19 +223,6 @@ impl AffinityPropagation {
             .into_iter()
             .for_each(|max_val| exemplar_map.get_mut(&max_val.0).unwrap().push(max_val.1));
         exemplar_map
-    }
-
-    fn new(x: Array2<Value>, cfg: Config) -> Self {
-        let x_dim_0 = x.dim();
-        assert_eq!(x_dim_0.0, x_dim_0.1, "similarity dim must be NxN");
-        let mut ap = Self {
-            similarity: x,
-            responsibility: Array2::zeros(x_dim_0),
-            availability: Array2::zeros(x_dim_0),
-            config: cfg,
-        };
-        ap.add_preference_to_sim();
-        ap
     }
 
     fn add_preference_to_sim(&mut self) {
@@ -302,5 +322,24 @@ impl AffinityPropagation {
             }
         });
         (max_pos, max)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    fn valid_update_r() {
+        todo!()
+    }
+
+    fn valid_update_a() {
+        todo!()
+    }
+
+    fn valid_select_exemplars() {
+        todo!()
+    }
+
+    fn valid_gather_members() {
+        todo!()
     }
 }
