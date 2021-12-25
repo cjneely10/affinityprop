@@ -1,9 +1,8 @@
-use crate::affinity_propagation::{AffinityPropagation, Config, Euclidean, Value};
 use crate::ops::from_file;
+use affinityprop::{AffinityPropagation, Config, Euclidean, Value};
 use std::path::Path;
 use std::process::exit;
 
-mod affinity_propagation;
 mod ops;
 
 #[macro_use]

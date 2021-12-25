@@ -1,4 +1,4 @@
-use crate::affinity_propagation::Value;
+use affinityprop::Value;
 use ndarray::{Array2, Axis};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
