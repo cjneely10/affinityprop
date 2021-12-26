@@ -5,9 +5,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 pub trait Similarity<F> {
-    type Type;
-    type F;
-    fn similarity(self, x: Array2<Self::Type>) -> Array2<F>;
+    type UserType;
+    type FloatType;
+    fn similarity(self, x: Array2<Self::UserType>) -> Array2<F>;
 }
 
 pub struct Euclidean;
@@ -22,20 +22,21 @@ impl<F> Similarity<F> for Euclidean
 where
     F: Float,
 {
-    type Type = F;
-    type F = F;
+    type UserType = F;
+    type FloatType = F;
 
     /// Row-by-row similarity calculation using negative euclidean distance
-    fn similarity(self, x: Array2<Self::Type>) -> Array2<F> {
+    fn similarity(self, x: Array2<Self::UserType>) -> Array2<F> {
         let x_dim = x.dim();
         let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
+        let neg_one = F::from(-1.).unwrap();
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
             x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
                 // Calculate values for half of matrix, copy over for remaining
                 if idx2 > idx1 {
                     let mut row_diff = &row1 - &row2;
                     row_diff.map_inplace(|a| *a = (*a).powi(2));
-                    out[[idx1, idx2]] = F::from(-1.).unwrap() * row_diff.sum();
+                    out[[idx1, idx2]] = neg_one * row_diff.sum();
                 } else {
                     out[[idx1, idx2]] = out[[idx2, idx1]];
                 }
@@ -47,23 +48,21 @@ where
 
 /// Implementation derived from sklearn AffinityPropagation implementation
 /// https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38
-pub struct AffinityPropagation<L, F> {
+pub struct AffinityPropagation<F> {
     similarity: Array2<F>,
     responsibility: Array2<F>,
     availability: Array2<F>,
-    labels: Vec<L>,
-    exemplar_map: HashMap<usize, Vec<usize>>,
-    verbose: bool,
+    pub exemplar_map: HashMap<usize, Vec<usize>>,
     damping: F,
     threads: usize,
     max_iterations: usize,
     convergence_iter: usize,
     preference: F,
+    converged: bool,
 }
 
-impl<L, F> AffinityPropagation<L, F>
+impl<F> AffinityPropagation<F>
 where
-    L: Display + Send + Clone + ToString,
     F: Float + Send + Sync,
 {
     /// Generate cluster predictions for set of `x` values and `y` labels
@@ -71,10 +70,8 @@ where
     /// - y: 1-D array of label values attached to each row in `x`
     /// - s: Similarity calculator -> must generate an N x N matrix
     pub fn new<S>(
-        x: Array2<S::Type>,
-        y: &[L],
+        x: Array2<S::UserType>,
         s: S,
-        verbose: bool,
         damping: F,
         threads: usize,
         max_iterations: usize,
@@ -84,47 +81,43 @@ where
     where
         S: Similarity<F>,
     {
-        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
         let s = s.similarity(x);
-        let s_dim_0 = s.dim();
-        assert_eq!(s_dim_0.0, y.len(), "similarity dim must be NxN");
+        let s_dim = s.dim();
+        assert_eq!(s_dim.0, s_dim.1, "similarity dim must be NxN");
         let mut ap = Self {
             similarity: s,
-            responsibility: Array2::<F>::zeros(s_dim_0),
-            availability: Array2::<F>::zeros(s_dim_0),
+            responsibility: Array2::<F>::zeros(s_dim),
+            availability: Array2::<F>::zeros(s_dim),
             exemplar_map: HashMap::new(),
-            labels: y.into_iter().map(|l| l.clone()).collect(),
-            verbose,
             damping,
             threads,
             max_iterations,
             convergence_iter,
             preference,
+            converged: false,
         };
         ap.add_preference_to_sim();
         ap
     }
 
-    pub fn with_defaults<S>(x: Array2<S::Type>, y: &[L], s: S, verbose: bool) -> Self
+    pub fn with_defaults<S>(x: Array2<S::UserType>, s: S) -> Self
     where
         S: Similarity<F>,
     {
-        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
         let s = s.similarity(x);
-        let s_dim_0 = s.dim();
-        assert_eq!(s_dim_0.0, y.len(), "similarity dim must be NxN");
+        let s_dim = s.dim();
+        assert_eq!(s_dim.0, s_dim.1, "similarity dim must be NxN");
         let mut ap = Self {
             similarity: s,
-            responsibility: Array2::<F>::zeros(s_dim_0),
-            availability: Array2::<F>::zeros(s_dim_0),
+            responsibility: Array2::<F>::zeros(s_dim),
+            availability: Array2::<F>::zeros(s_dim),
             exemplar_map: HashMap::new(),
-            labels: y.into_iter().map(|l| l.clone()).collect(),
-            verbose,
             damping: F::from(0.5).unwrap(),
             threads: 4,
             max_iterations: 100,
             convergence_iter: 10,
             preference: F::from(-10.).unwrap(),
+            converged: false,
         };
         ap.add_preference_to_sim();
         ap
@@ -136,7 +129,6 @@ where
             .build()
             .unwrap();
         pool.scope(move |_| {
-            let mut converged: bool = false;
             for _ in 0..self.convergence_iter {
                 self.update_r();
                 self.update_a();
@@ -149,12 +141,12 @@ where
                 if final_exemplars.len() == sol_map.len()
                     && final_exemplars.iter().all(|k| sol_map.contains(k))
                 {
-                    converged = true;
+                    self.converged = true;
                     break;
                 }
                 final_exemplars = sol_map;
             }
-            self.display_results(converged, final_exemplars);
+            self.exemplar_map = self.generate_exemplar_map(final_exemplars);
         });
     }
 
@@ -162,15 +154,13 @@ where
         &self.exemplar_map
     }
 
-    fn display_results(&mut self, converged: bool, final_exemplars: HashSet<usize>) {
-        let exemplar_map = self.generate_exemplar_map(final_exemplars);
-        self.exemplar_map = exemplar_map;
-        if !self.verbose {
-            return;
-        }
+    pub fn display_results<L>(&mut self, labels: &[L])
+    where
+        L: Display + Send + Clone + ToString,
+    {
         println!(
             "Converged={} nClusters={} nSamples={}",
-            converged,
+            self.converged,
             self.exemplar_map.len(),
             self.similarity.dim().0
         );
@@ -182,13 +172,13 @@ where
                     ">Cluster={} size={} exemplar={}",
                     idx + 1,
                     value.len(),
-                    self.labels[*key]
+                    labels[*key]
                 );
                 println!(
                     "{}",
                     value
                         .iter()
-                        .map(|v| self.labels[*v].to_string())
+                        .map(|v| labels[*v].to_string())
                         .collect::<Vec<String>>()
                         .join(",")
                 );
@@ -273,7 +263,9 @@ where
 
         Zip::from(tmp.axis_iter_mut(Axis(1)))
             .and(&max_idx)
-            .par_for_each(|mut t, &m| t[m] = F::from(-1.).unwrap() * F::from(f64::INFINITY).unwrap());
+            .par_for_each(|mut t, &m| {
+                t[m] = F::from(-1.).unwrap() * F::from(f64::INFINITY).unwrap()
+            });
 
         let max2 = Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
 

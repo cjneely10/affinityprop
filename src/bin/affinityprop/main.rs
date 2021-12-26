@@ -43,9 +43,21 @@ fn main() {
         .unwrap_or("4")
         .parse::<usize>()
         .expect("Unable to parse threads");
-    let precision = matches
-        .value_of("PRECISION")
-        .unwrap_or("f32");
+    let precision = matches.value_of("PRECISION").unwrap_or("f32");
+    let preference = matches
+        .value_of("PREF")
+        .unwrap_or("-10.0")
+        .parse::<f64>()
+        .expect("Unable to parse preference");
+    let damping = matches
+        .value_of("DAMPING")
+        .unwrap_or("0.9")
+        .parse::<f64>()
+        .expect("Unable to parse damping");
+    if damping < 0. || damping > 1. {
+        eprintln!("Improper parameter set!");
+        exit(2);
+    }
     // Validate values
     if threads < 1 || convergence_iter < 1 || max_iterations < 1 {
         eprintln!("Improper parameter set!");
@@ -57,26 +69,10 @@ fn main() {
     // Run AP
     match precision {
         "f64" => {
-            let preference = matches
-                .value_of("PREF")
-                .unwrap_or("-10.0")
-                .parse::<f64>()
-                .expect("Unable to parse preference");
-            let damping = matches
-                .value_of("DAMPING")
-                .unwrap_or("0.9")
-                .parse::<f64>()
-                .expect("Unable to parse damping");
-            if damping < 0. || damping > 1. {
-                eprintln!("Improper parameter set!");
-                exit(2);
-            }
             let (x, y) = from_file::<f64>(Path::new(&input_file).to_path_buf());
             let mut ap = AffinityPropagation::new(
                 x,
-                &y,
                 Euclidean::default(),
-                true,
                 damping,
                 threads,
                 max_iterations,
@@ -84,35 +80,21 @@ fn main() {
                 preference,
             );
             ap.predict();
+            ap.display_results(&y);
         }
         _ => {
-            let preference = matches
-                .value_of("PREF")
-                .unwrap_or("-10.0")
-                .parse::<f32>()
-                .expect("Unable to parse preference");
-            let damping = matches
-                .value_of("DAMPING")
-                .unwrap_or("0.9")
-                .parse::<f32>()
-                .expect("Unable to parse damping");
-            if damping < 0. || damping > 1. {
-                eprintln!("Improper parameter set!");
-                exit(2);
-            }
             let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
             let mut ap = AffinityPropagation::new(
                 x,
-                &y,
                 Euclidean::default(),
-                true,
-                damping,
+                damping as f32,
                 threads,
                 max_iterations,
                 convergence_iter,
-                preference,
+                preference as f32,
             );
             ap.predict();
+            ap.display_results(&y);
         }
     };
 }
