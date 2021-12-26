@@ -289,19 +289,19 @@ where
         let s = s.similarity(x);
         let s_dim = s.dim();
         assert_eq!(s_dim.0, s_dim.1, "similarity dim must be NxN");
-        let mut calculation = Calculation {
-            similarity: s,
-            responsibility: Array2::zeros(s_dim),
-            availability: Array2::zeros(s_dim),
-            damping: self.damping,
-        };
-        calculation.add_preference_to_sim(self.preference);
 
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(self.threads)
             .build()
             .unwrap();
         let results = pool.scope(move |_| {
+            let mut calculation = Calculation {
+                similarity: s,
+                responsibility: Array2::zeros(s_dim),
+                availability: Array2::zeros(s_dim),
+                damping: self.damping,
+            };
+            calculation.add_preference_to_sim(self.preference);
             for _ in 0..self.convergence_iter {
                 calculation.update_r();
                 calculation.update_a();
