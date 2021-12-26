@@ -1,40 +1,13 @@
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
+use num_traits::Float;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 
-#[cfg(feature = "f64")]
-pub type Value = f64;
-
-#[cfg(feature = "f32")]
-pub type Value = f32;
-
-const NEG_INF: Value = (-1. as Value) * Value::INFINITY;
-
-#[derive(Copy, Clone, Debug)]
-pub struct Config {
-    pub damping: Value,
-    pub threads: usize,
-    pub max_iterations: usize,
-    pub convergence_iter: usize,
-    pub preference: Value,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            damping: 0.5,
-            preference: -10.,
-            threads: 4,
-            max_iterations: 100,
-            convergence_iter: 10,
-        }
-    }
-}
-
-pub trait Similarity {
-    type Type;
-    fn similarity(self, x: Array2<Self::Type>) -> Array2<Value>;
+pub trait Similarity<F> {
+    type UserType;
+    type FloatType;
+    fn similarity(self, x: Array2<Self::UserType>) -> Array2<F>;
 }
 
 pub struct Euclidean;
@@ -45,20 +18,25 @@ impl Default for Euclidean {
     }
 }
 
-impl Similarity for Euclidean {
-    type Type = Value;
+impl<F> Similarity<F> for Euclidean
+where
+    F: Float,
+{
+    type UserType = F;
+    type FloatType = F;
 
     /// Row-by-row similarity calculation using negative euclidean distance
-    fn similarity(self, x: Array2<Self::Type>) -> Array2<Value> {
+    fn similarity(self, x: Array2<Self::UserType>) -> Array2<F> {
         let x_dim = x.dim();
-        let mut out = Array2::<Value>::zeros((x_dim.0, x_dim.0));
+        let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
+        let neg_one = F::from(-1.).unwrap();
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
             x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
                 // Calculate values for half of matrix, copy over for remaining
                 if idx2 > idx1 {
                     let mut row_diff = &row1 - &row2;
                     row_diff.map_inplace(|a| *a = (*a).powi(2));
-                    out[[idx1, idx2]] = -1. * row_diff.sum();
+                    out[[idx1, idx2]] = neg_one * row_diff.sum();
                 } else {
                     out[[idx1, idx2]] = out[[idx2, idx1]];
                 }
@@ -70,71 +48,105 @@ impl Similarity for Euclidean {
 
 /// Implementation derived from sklearn AffinityPropagation implementation
 /// https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38
-pub struct AffinityPropagation<L> {
-    similarity: Array2<Value>,
-    responsibility: Array2<Value>,
-    availability: Array2<Value>,
-    labels: Vec<L>,
-    exemplar_map: HashMap<usize, Vec<usize>>,
-    verbose: bool,
-    config: Config,
+pub struct AffinityPropagation<F> {
+    similarity: Array2<F>,
+    responsibility: Array2<F>,
+    availability: Array2<F>,
+    pub exemplar_map: HashMap<usize, Vec<usize>>,
+    damping: F,
+    threads: usize,
+    max_iterations: usize,
+    convergence_iter: usize,
+    preference: F,
+    converged: bool,
 }
 
-impl<L> AffinityPropagation<L>
+impl<F> AffinityPropagation<F>
 where
-    L: Display + Send + Clone + ToString,
+    F: Float + Send + Sync,
 {
-    pub fn new<S>(x: Array2<S::Type>, y: &[L], cfg: Config, s: S, verbose: bool) -> Self
+    /// Generate cluster predictions for set of `x` values and `y` labels
+    /// - x: 2-D array of (rows=samples, cols=attr_values)
+    /// - y: 1-D array of label values attached to each row in `x`
+    /// - s: Similarity calculator -> must generate an N x N matrix
+    pub fn new<S>(
+        x: Array2<S::UserType>,
+        s: S,
+        damping: F,
+        threads: usize,
+        max_iterations: usize,
+        convergence_iter: usize,
+        preference: F,
+    ) -> Self
     where
-        S: Similarity,
+        S: Similarity<F>,
     {
-        assert_eq!(x.dim().0, y.len(), "`x` n_row != `y` length");
         let s = s.similarity(x);
-        let s_dim_0 = s.dim();
-        assert_eq!(s_dim_0.0, y.len(), "similarity dim must be NxN");
+        let s_dim = s.dim();
+        assert_eq!(s_dim.0, s_dim.1, "similarity dim must be NxN");
         let mut ap = Self {
             similarity: s,
-            responsibility: Array2::zeros(s_dim_0),
-            availability: Array2::zeros(s_dim_0),
-            config: cfg,
+            responsibility: Array2::<F>::zeros(s_dim),
+            availability: Array2::<F>::zeros(s_dim),
             exemplar_map: HashMap::new(),
-            labels: y.into_iter().map(|l| l.clone()).collect(),
-            verbose,
+            damping,
+            threads,
+            max_iterations,
+            convergence_iter,
+            preference,
+            converged: false,
         };
         ap.add_preference_to_sim();
         ap
     }
 
-    /// Generate cluster predictions for set of `x` values and `y` labels
-    /// - x: 2-D array of (rows=samples, cols=attr_values)
-    /// - y: 1-D array of label values attached to each row in `x`
-    /// - cfg: Prediction configurations
-    /// - s: Similarity calculator -> must generate an N x N matrix
+    pub fn with_defaults<S>(x: Array2<S::UserType>, s: S) -> Self
+    where
+        S: Similarity<F>,
+    {
+        let s = s.similarity(x);
+        let s_dim = s.dim();
+        assert_eq!(s_dim.0, s_dim.1, "similarity dim must be NxN");
+        let mut ap = Self {
+            similarity: s,
+            responsibility: Array2::<F>::zeros(s_dim),
+            availability: Array2::<F>::zeros(s_dim),
+            exemplar_map: HashMap::new(),
+            damping: F::from(0.5).unwrap(),
+            threads: 4,
+            max_iterations: 100,
+            convergence_iter: 10,
+            preference: F::from(-10.).unwrap(),
+            converged: false,
+        };
+        ap.add_preference_to_sim();
+        ap
+    }
+
     pub fn predict(&mut self) {
         let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(self.config.threads)
+            .num_threads(self.threads)
             .build()
             .unwrap();
         pool.scope(move |_| {
-            let mut converged: bool = false;
-            for _ in 0..self.config.convergence_iter {
+            for _ in 0..self.convergence_iter {
                 self.update_r();
                 self.update_a();
             }
             let mut final_exemplars = self.generate_exemplars();
-            for _ in self.config.convergence_iter..self.config.max_iterations {
+            for _ in self.convergence_iter..self.max_iterations {
                 self.update_r();
                 self.update_a();
                 let sol_map = self.generate_exemplars();
                 if final_exemplars.len() == sol_map.len()
                     && final_exemplars.iter().all(|k| sol_map.contains(k))
                 {
-                    converged = true;
+                    self.converged = true;
                     break;
                 }
                 final_exemplars = sol_map;
             }
-            self.display_results(converged, final_exemplars);
+            self.exemplar_map = self.generate_exemplar_map(final_exemplars);
         });
     }
 
@@ -142,15 +154,13 @@ where
         &self.exemplar_map
     }
 
-    fn display_results(&mut self, converged: bool, final_exemplars: HashSet<usize>) {
-        let exemplar_map = self.generate_exemplar_map(final_exemplars);
-        self.exemplar_map = exemplar_map;
-        if !self.verbose {
-            return;
-        }
+    pub fn display_results<L>(&self, labels: &[L])
+    where
+        L: Display + Send + Clone + ToString,
+    {
         println!(
             "Converged={} nClusters={} nSamples={}",
-            converged,
+            self.converged,
             self.exemplar_map.len(),
             self.similarity.dim().0
         );
@@ -162,13 +172,13 @@ where
                     ">Cluster={} size={} exemplar={}",
                     idx + 1,
                     value.len(),
-                    self.labels[*key]
+                    labels[*key]
                 );
                 println!(
                     "{}",
                     value
                         .iter()
-                        .map(|v| self.labels[*v].to_string())
+                        .map(|v| labels[*v].to_string())
                         .collect::<Vec<String>>()
                         .join(",")
                 );
@@ -176,14 +186,19 @@ where
     }
 
     fn generate_exemplars(&self) -> HashSet<usize> {
-        let idx = Array1::range(0., self.similarity.dim().0 as Value, 1.);
+        let idx = Array1::<F>::range(
+            F::from(0.).unwrap(),
+            F::from(self.similarity.dim().0).unwrap(),
+            F::from(1.).unwrap(),
+        );
+        let zero = F::from(0.).unwrap();
         let values: Vec<isize> = Vec::from_iter(
             Zip::from(&self.responsibility.diag())
                 .and(&self.availability.diag())
                 .and(&idx)
-                .par_map_collect(|&r, &a, &i| {
-                    if r + a > 0. {
-                        return i as isize;
+                .par_map_collect(|&r, &a, &i: &F| {
+                    if r + a > zero {
+                        return i.to_isize().unwrap();
                     }
                     return -1;
                 }),
@@ -198,16 +213,20 @@ where
 
     fn generate_exemplar_map(&self, sol_map: HashSet<usize>) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, vec![])));
-        let idx = Array1::range(0., self.similarity.dim().0 as Value, 1.);
+        let idx = Array1::range(
+            F::from(0.).unwrap(),
+            F::from(self.similarity.dim().0).unwrap(),
+            F::from(1.).unwrap(),
+        );
         let max_results = Zip::from(&idx)
             .and(self.similarity.axis_iter(Axis(1)))
             .par_map_collect(|&i, col| {
-                let i = i as usize;
+                let i = i.to_usize().unwrap();
                 if exemplar_map.contains_key(&i) {
                     return (i, i);
                 }
                 // Collect into (idx, value)
-                let mut col_data: Vec<(usize, Value)> =
+                let mut col_data: Vec<(usize, F)> =
                     col.into_iter().map(|v| v.clone()).enumerate().collect();
                 // Sort by value
                 col_data.sort_by(|&v1, &v2| v2.1.partial_cmp(&v1.1).unwrap());
@@ -226,12 +245,12 @@ where
     }
 
     fn add_preference_to_sim(&mut self) {
-        let pref = self.config.preference;
+        let pref = self.preference;
         self.similarity.diag_mut().par_map_inplace(|v| *v = pref);
     }
 
     fn update_r(&mut self) {
-        let mut tmp: Array2<Value> = Array2::zeros(self.similarity.dim());
+        let mut tmp: Array2<F> = Array2::zeros(self.similarity.dim());
         Zip::from(&mut tmp)
             .and(&self.similarity)
             .and(&self.availability)
@@ -241,15 +260,18 @@ where
             Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col));
 
         let max_idx: Array1<usize> = combined.iter().map(|c| c.0).collect();
-        let max1: Array1<Value> = combined.iter().map(|c| c.1).collect();
+        let max1: Array1<F> = combined.iter().map(|c| c.1).collect();
 
+        let neg_inf = F::from(-1.).unwrap() * F::from(f64::INFINITY).unwrap();
         Zip::from(tmp.axis_iter_mut(Axis(1)))
             .and(&max_idx)
-            .par_for_each(|mut t, &m| t[m] = NEG_INF);
+            .par_for_each(|mut t, &m| {
+                t[m] = neg_inf;
+            });
 
         let max2 = Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
 
-        let mut tmp: Array2<Value> = Zip::from(&self.similarity)
+        let mut tmp: Array2<F> = Zip::from(&self.similarity)
             .and(
                 &max1
                     .insert_axis(Axis(1))
@@ -264,8 +286,8 @@ where
             .and(&max2)
             .par_for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
-        let damping = self.config.damping;
-        let inv_damping = 1. - damping;
+        let damping = self.damping;
+        let inv_damping = F::from(1.).unwrap() - damping;
         tmp.par_map_inplace(|v| *v = *v * inv_damping);
         self.responsibility.par_map_inplace(|v| *v = *v * damping);
         Zip::from(&mut self.responsibility)
@@ -275,9 +297,10 @@ where
 
     fn update_a(&mut self) {
         let mut tmp = self.responsibility.clone();
+        let zero = F::from(0.).unwrap();
         tmp.par_map_inplace(|v| {
-            if *v < 0. {
-                *v = 0.;
+            if *v < zero {
+                *v = zero;
             }
         });
         Zip::from(tmp.diag_mut())
@@ -295,16 +318,16 @@ where
 
         let tmp_diag = tmp.diag().to_owned();
         tmp.par_map_inplace(|v| {
-            if *v < 0. {
-                *v = 0.;
+            if *v < zero {
+                *v = zero;
             }
         });
         Zip::from(tmp.diag_mut())
             .and(&tmp_diag)
             .par_for_each(|t, d| *t = *d);
 
-        let damping = self.config.damping;
-        let inv_damping = 1. - damping;
+        let damping = self.damping;
+        let inv_damping = F::from(1.).unwrap() - damping;
         tmp.par_map_inplace(|v| *v = *v * inv_damping);
         self.availability.par_map_inplace(|v| *v = *v * damping);
         Zip::from(&mut self.availability)
@@ -312,9 +335,9 @@ where
             .par_for_each(|a, &t| *a = *a - t);
     }
 
-    fn max_argmax(data: ArrayView<Value, Dim<[usize; 1]>>) -> (usize, Value) {
+    fn max_argmax(data: ArrayView<F, Dim<[usize; 1]>>) -> (usize, F) {
         let mut max_pos = 0;
-        let mut max: Value = data[0];
+        let mut max: F = data[0];
         data.iter().enumerate().for_each(|(idx, val)| {
             if *val > max {
                 max = *val;

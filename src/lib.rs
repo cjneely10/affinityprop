@@ -1,3 +1,3 @@
 mod affinity_propagation;
 
-pub use crate::affinity_propagation::{AffinityPropagation, Config, Euclidean, Value};
+pub use crate::affinity_propagation::{AffinityPropagation, Euclidean};
