@@ -18,8 +18,6 @@ git clone git@github.com:cjneely10/affinityprop.git
 cd affinityprop
 ```
 
-If desired, increase precision by changing line 9 of the `Cargo.toml` file from `f32` to `f64`.
-
 The program binary will be present in the `target/release` directory.
 
 ## Usage
@@ -61,6 +59,7 @@ OPTIONS:
     -d, --damping <DAMPING>               Damping value, default=0.9
     -i, --input <INPUT>                   Path to input file
     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
+    -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
     -p, --preference <PREF>               Preference, default=-10.0
     -t, --threads <THREADS>               Number of worker threads, default=4
 ```
@@ -94,7 +93,7 @@ cargo run --release --bin affinityprop -- -i ./data/Infant_gut_assembly.cov.x100
 ### Results
 
 Increasing thread count can see up to a 60% runtime reduction for 32-bit floating point precision,
-and around a 20-30% reduction in 64-bit mode.
+and around a 20-30% reduction in 64-bit mode (i.e., when run using the `-r f64` flag).
 
 Results are printed to stdout in the format:
 

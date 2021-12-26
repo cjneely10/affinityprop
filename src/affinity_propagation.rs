@@ -154,7 +154,7 @@ where
         &self.exemplar_map
     }
 
-    pub fn display_results<L>(&mut self, labels: &[L])
+    pub fn display_results<L>(&self, labels: &[L])
     where
         L: Display + Send + Clone + ToString,
     {
@@ -191,12 +191,13 @@ where
             F::from(self.similarity.dim().0).unwrap(),
             F::from(1.).unwrap(),
         );
+        let zero = F::from(0.).unwrap();
         let values: Vec<isize> = Vec::from_iter(
             Zip::from(&self.responsibility.diag())
                 .and(&self.availability.diag())
                 .and(&idx)
                 .par_map_collect(|&r, &a, &i: &F| {
-                    if r + a > F::from(0.).unwrap() {
+                    if r + a > zero {
                         return i.to_isize().unwrap();
                     }
                     return -1;
@@ -261,10 +262,11 @@ where
         let max_idx: Array1<usize> = combined.iter().map(|c| c.0).collect();
         let max1: Array1<F> = combined.iter().map(|c| c.1).collect();
 
+        let neg_inf = F::from(-1.).unwrap() * F::from(f64::INFINITY).unwrap();
         Zip::from(tmp.axis_iter_mut(Axis(1)))
             .and(&max_idx)
             .par_for_each(|mut t, &m| {
-                t[m] = F::from(-1.).unwrap() * F::from(f64::INFINITY).unwrap()
+                t[m] = neg_inf;
             });
 
         let max2 = Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
@@ -295,9 +297,10 @@ where
 
     fn update_a(&mut self) {
         let mut tmp = self.responsibility.clone();
+        let zero = F::from(0.).unwrap();
         tmp.par_map_inplace(|v| {
-            if *v < F::from(0.).unwrap() {
-                *v = F::from(0.).unwrap();
+            if *v < zero {
+                *v = zero;
             }
         });
         Zip::from(tmp.diag_mut())
@@ -315,8 +318,8 @@ where
 
         let tmp_diag = tmp.diag().to_owned();
         tmp.par_map_inplace(|v| {
-            if *v < F::from(0.).unwrap() {
-                *v = F::from(0.).unwrap();
+            if *v < zero {
+                *v = zero;
             }
         });
         Zip::from(tmp.diag_mut())

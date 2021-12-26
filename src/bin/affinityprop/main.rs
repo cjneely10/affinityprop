@@ -19,7 +19,7 @@ fn main() {
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
         (@arg DAMPING: -d --damping +takes_value "Damping value, default=0.9")
         (@arg THREADS: -t --threads +takes_value "Number of worker threads, default=4")
-        (@arg PRECISION: -r --precision +takes_value "Set f32 or f64 precision")
+        (@arg PRECISION: -r --precision +takes_value "Set f32 or f64 precision, default=f32")
     )
     .get_matches();
 
