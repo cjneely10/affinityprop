@@ -6,7 +6,6 @@ use std::fmt::Display;
 
 pub trait Similarity<F> {
     type UserType;
-    type FloatType;
     fn similarity(self, x: Array2<Self::UserType>) -> Array2<F>;
 }
 
@@ -23,7 +22,6 @@ where
     F: Float,
 {
     type UserType = F;
-    type FloatType = F;
 
     /// Row-by-row similarity calculation using negative euclidean distance
     fn similarity(self, x: Array2<Self::UserType>) -> Array2<F> {
@@ -156,7 +154,7 @@ where
 
     pub fn display_results<L>(&self, labels: &[L])
     where
-        L: Display + Send + Clone + ToString,
+        L: Display + Clone + ToString,
     {
         println!(
             "Converged={} nClusters={} nSamples={}",
