@@ -71,30 +71,26 @@ fn main() {
         "f64" => {
             let (x, y) = from_file::<f64>(Path::new(&input_file).to_path_buf());
             let mut ap = AffinityPropagation::new(
-                x,
-                Euclidean::default(),
                 damping,
                 threads,
                 max_iterations,
                 convergence_iter,
                 preference,
             );
-            ap.predict();
-            ap.display_results(&y);
+            let results = ap.predict(x, &y, Euclidean::default());
+            ap.display_results(&results);
         }
         _ => {
             let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
             let mut ap = AffinityPropagation::new(
-                x,
-                Euclidean::default(),
                 damping as f32,
                 threads,
                 max_iterations,
                 convergence_iter,
                 preference as f32,
             );
-            ap.predict();
-            ap.display_results(&y);
+            let results = ap.predict(x, &y, Euclidean::default());
+            ap.display_results(&results);
         }
     };
 }
