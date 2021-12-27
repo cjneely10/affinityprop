@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod test {
-    use affinityprop::{AffinityPropagation, Euclidean};
     use ndarray::{arr2, Array2};
+
+    use affinityprop::{AffinityPropagation, Euclidean};
 
     #[test]
     fn simple() {

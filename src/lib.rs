@@ -1,3 +1,7 @@
-mod affinity_propagation;
+pub use similarity::{Euclidean, Similarity};
 
-pub use crate::affinity_propagation::{AffinityPropagation, Euclidean};
+pub use affinity_propagation::AffinityPropagation;
+
+mod affinity_propagation;
+mod algorithm;
+mod similarity;

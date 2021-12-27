@@ -1,12 +1,14 @@
-use crate::ops::from_file;
-use affinityprop::{AffinityPropagation, Euclidean};
+#[macro_use]
+extern crate clap;
+
 use std::path::Path;
 use std::process::exit;
 
-mod ops;
+use affinityprop::{AffinityPropagation, Euclidean};
 
-#[macro_use]
-extern crate clap;
+use crate::ops::from_file;
+
+mod ops;
 
 fn main() {
     let matches = clap_app!(affinityprop =>
