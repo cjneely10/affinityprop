@@ -63,7 +63,7 @@ where
 
     pub fn predict<'a, S, L>(
         &mut self,
-        x: Array2<S::UserType>,
+        x: Array2<F>,
         y: &'a [L],
         s: S,
     ) -> HashMap<&'a L, Vec<&'a L>>
