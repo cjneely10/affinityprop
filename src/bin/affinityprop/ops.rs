@@ -1,10 +1,11 @@
-use ndarray::{Array2, Axis};
-use num_traits::Float;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::str::FromStr;
+
+use ndarray::{Array2, Axis};
+use num_traits::Float;
 
 /// Reads in a file formatted as (tab separated):
 ///     id1 val1 val2 val3
