@@ -4,12 +4,13 @@ extern crate clap;
 use std::path::Path;
 use std::process::exit;
 
-use affinityprop::{AffinityPropagation, Euclidean};
+use affinityprop::{AffinityPropagation, NegEuclidean};
 
 use crate::ops::{display_results, from_file};
 
 mod ops;
 
+// TODO: Error output formatting
 fn main() {
     let matches = clap_app!(affinityprop =>
         (version: "0.1.0")
@@ -30,7 +31,7 @@ fn main() {
         eprintln!("Unable to locate input file {}", input_file);
         exit(1);
     }
-    let mut max_iterations = matches
+    let max_iterations = matches
         .value_of("MAX_ITER")
         .unwrap_or("100")
         .parse::<usize>()
@@ -49,49 +50,50 @@ fn main() {
     let preference = matches
         .value_of("PREF")
         .unwrap_or("-10.0")
-        .parse::<f64>()
+        .parse::<f32>()
         .expect("Unable to parse preference");
     let damping = matches
         .value_of("DAMPING")
         .unwrap_or("0.9")
-        .parse::<f64>()
+        .parse::<f32>()
         .expect("Unable to parse damping");
     if damping < 0. || damping > 1. {
         eprintln!("Improper parameter set!");
         exit(2);
     }
     // Validate values
-    if threads < 1 || convergence_iter < 1 || max_iterations < 1 {
+    if threads < 1
+        || convergence_iter < 1
+        || max_iterations < 1
+        || max_iterations < convergence_iter
+    {
         eprintln!("Improper parameter set!");
         exit(2);
-    }
-    if convergence_iter > max_iterations {
-        max_iterations = convergence_iter * 2;
     }
     // Run AP
     match precision {
         "f64" => {
             let (x, y) = from_file::<f64>(Path::new(&input_file).to_path_buf());
             let mut ap = AffinityPropagation::new(
-                damping,
+                preference as f64,
+                damping as f64,
                 threads,
-                max_iterations,
                 convergence_iter,
-                preference,
+                max_iterations,
             );
-            let results = ap.predict(x, &y, Euclidean::default());
+            let results = ap.predict(&x, &y, NegEuclidean::default());
             display_results(ap.converged(), &results);
         }
         _ => {
             let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
             let mut ap = AffinityPropagation::new(
-                damping as f32,
+                preference,
+                damping,
                 threads,
-                max_iterations,
                 convergence_iter,
-                preference as f32,
+                max_iterations,
             );
-            let results = ap.predict(x, &y, Euclidean::default());
+            let results = ap.predict(&x, &y, NegEuclidean::default());
             display_results(ap.converged(), &results);
         }
     };

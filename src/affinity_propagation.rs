@@ -26,10 +26,10 @@ where
     /// Create new model with default parameters
     ///
     /// - damping: 0.5
-    /// - threads: 4
-    /// - max_iterations: 100
-    /// - convergence_iter: 10
     /// - preference: -10.
+    /// - threads: 4
+    /// - convergence_iter: 10
+    /// - max_iterations: 100
     fn default() -> Self {
         Self {
             damping: F::from(0.5).unwrap(),
@@ -48,17 +48,17 @@ where
 {
     /// Create new model with provided parameters
     ///
+    /// - preference: non-positive number representing a data point's desire to be its own exemplar
     /// - damping: 0 <= damping <= 1
     /// - threads: parallel threads for analysis
-    /// - max_iterations: total allowed iterations
     /// - convergence_iter: number of iterations to run before checking for convergence
-    /// - preference: non-positive number representing a data point's desire to be its own exemplar
+    /// - max_iterations: total allowed iterations
     pub fn new(
+        preference: F,
         damping: F,
         threads: usize,
-        max_iterations: usize,
         convergence_iter: usize,
-        preference: F,
+        max_iterations: usize,
     ) -> Self {
         assert!(
             damping >= F::from(0.).unwrap() && damping <= F::from(1.).unwrap(),
@@ -82,12 +82,12 @@ where
     /// - x: 2-D array of (rows=samples, cols=attr_values)
     /// - y: Slice of label values attached to each row in `x`
     /// - s: Similarity calculator -> must generate an N x N matrix
-    pub fn predict<'a, S, L>(
+    pub fn predict<'a, 'b, S, L>(
         &mut self,
-        x: Array2<F>,
-        y: &'a [L],
+        x: &'a Array2<F>,
+        y: &'b [L],
         s: S,
-    ) -> HashMap<&'a L, Vec<&'a L>>
+    ) -> HashMap<&'b L, Vec<&'b L>>
     where
         S: Similarity<F>,
         L: Eq + Hash,
@@ -143,14 +143,14 @@ where
 mod test {
     use ndarray::{arr2, Array2};
 
-    use crate::{AffinityPropagation, Euclidean};
+    use crate::{AffinityPropagation, NegEuclidean};
 
     #[test]
     fn simple() {
         let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
         let y = vec!["1", "2", "3"];
         let mut ap = AffinityPropagation::default();
-        let results = ap.predict(x, &y, Euclidean::default());
+        let results = ap.predict(&x, &y, NegEuclidean::default());
         assert!(results.len() == 1 && results.contains_key(&"2"));
     }
 }
