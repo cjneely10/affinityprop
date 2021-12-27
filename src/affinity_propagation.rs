@@ -1,6 +1,5 @@
 use std::cmp::Eq;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::hash::Hash;
 
 use ndarray::Array2;
@@ -17,13 +16,20 @@ pub struct AffinityPropagation<F> {
     threads: usize,
     convergence_iter: usize,
     max_iterations: usize,
-    pub converged: bool,
+    has_converged: bool,
 }
 
 impl<F> Default for AffinityPropagation<F>
 where
     F: Float + Send + Sync,
 {
+    /// Create new model with default parameters
+    ///
+    /// - damping: 0.5
+    /// - threads: 4
+    /// - max_iterations: 100
+    /// - convergence_iter: 10
+    /// - preference: -10.
     fn default() -> Self {
         Self {
             damping: F::from(0.5).unwrap(),
@@ -31,7 +37,7 @@ where
             max_iterations: 100,
             convergence_iter: 10,
             preference: F::from(-10.).unwrap(),
-            converged: false,
+            has_converged: false,
         }
     }
 }
@@ -40,10 +46,13 @@ impl<F> AffinityPropagation<F>
 where
     F: Float + Send + Sync,
 {
-    /// Generate cluster predictions for set of `x` values and `y` labels
-    /// - x: 2-D array of (rows=samples, cols=attr_values)
-    /// - y: 1-D array of label values attached to each row in `x`
-    /// - s: Similarity calculator -> must generate an N x N matrix
+    /// Create new model with provided parameters
+    ///
+    /// - damping: 0 <= damping <= 1
+    /// - threads: parallel threads for analysis
+    /// - max_iterations: total allowed iterations
+    /// - convergence_iter: number of iterations to run before checking for convergence
+    /// - preference: non-positive number representing a data point's desire to be its own exemplar
     pub fn new(
         damping: F,
         threads: usize,
@@ -51,19 +60,31 @@ where
         convergence_iter: usize,
         preference: F,
     ) -> Self {
+        assert!(
+            damping >= F::from(0.).unwrap() && damping <= F::from(1.).unwrap(),
+            "invalid damping value provided"
+        );
+        assert!(
+            F::from(preference).unwrap() <= F::from(0.).unwrap(),
+            "invalid preference provided"
+        );
         Self {
             damping,
             threads,
             max_iterations,
             convergence_iter,
             preference,
-            converged: false,
+            has_converged: false,
         }
     }
 
+    /// Generate cluster predictions for set of `x` values and `y` labels
+    /// - x: 2-D array of (rows=samples, cols=attr_values)
+    /// - y: Slice of label values attached to each row in `x`
+    /// - s: Similarity calculator -> must generate an N x N matrix
     pub fn predict<'a, S, L>(
         &mut self,
-        x: Array2<S::UserType>,
+        x: Array2<F>,
         y: &'a [L],
         s: S,
     ) -> HashMap<&'a L, Vec<&'a L>>
@@ -99,7 +120,7 @@ where
                 if final_exemplars.len() == sol_map.len()
                     && final_exemplars.iter().all(|k| sol_map.contains(k))
                 {
-                    self.converged = true;
+                    self.has_converged = true;
                     break;
                 }
                 final_exemplars = sol_map;
@@ -113,26 +134,23 @@ where
         )
     }
 
-    pub fn display_results<'a, L>(&self, results: &HashMap<&'a L, Vec<&'a L>>)
-    where
-        L: Display + Clone + ToString,
-    {
-        println!(
-            "Converged={} nClusters={} nSamples={}",
-            self.converged,
-            results.len(),
-            results.iter().map(|(_, v)| v.len()).sum::<usize>()
-        );
-        results.iter().enumerate().for_each(|(idx, (key, value))| {
-            println!(">Cluster={} size={} exemplar={}", idx + 1, value.len(), key);
-            println!(
-                "{}",
-                value
-                    .iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<String>>()
-                    .join(",")
-            );
-        });
+    pub fn converged(&self) -> bool {
+        self.has_converged
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use ndarray::{arr2, Array2};
+
+    use crate::{AffinityPropagation, Euclidean};
+
+    #[test]
+    fn simple() {
+        let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+        let y = vec!["1", "2", "3"];
+        let mut ap = AffinityPropagation::default();
+        let results = ap.predict(x, &y, Euclidean::default());
+        assert!(results.len() == 1 && results.contains_key(&"2"));
     }
 }

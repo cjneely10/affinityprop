@@ -5,8 +5,7 @@ pub trait Similarity<F>
 where
     F: Float + Send + Sync,
 {
-    type UserType;
-    fn similarity(self, x: Array2<Self::UserType>) -> Array2<F>;
+    fn similarity(self, x: Array2<F>) -> Array2<F>;
 }
 
 pub struct Euclidean;
@@ -21,10 +20,8 @@ impl<F> Similarity<F> for Euclidean
 where
     F: Float + Send + Sync,
 {
-    type UserType = F;
-
     /// Row-by-row similarity calculation using negative euclidean distance
-    fn similarity(self, x: Array2<Self::UserType>) -> Array2<F> {
+    fn similarity(self, x: Array2<F>) -> Array2<F> {
         let x_dim = x.dim();
         let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
         let neg_one = F::from(-1.).unwrap();
@@ -41,5 +38,21 @@ where
             });
         });
         out
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Euclidean, Similarity};
+    use ndarray::{arr2, Zip};
+
+    #[test]
+    fn valid_similarity() {
+        let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+        let s = Euclidean::default().similarity(x);
+        let actual = arr2(&[[0., -3.0, -12.0], [-3.0, 0., -3.0], [-12.0, -3.0, 0.]]);
+        Zip::from(&s)
+            .and(&actual)
+            .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-8));
     }
 }
