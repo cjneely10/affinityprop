@@ -40,3 +40,19 @@ where
         out
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{Euclidean, Similarity};
+    use ndarray::{arr2, Zip};
+
+    #[test]
+    fn valid_similarity() {
+        let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+        let s = Euclidean::default().similarity(x);
+        let actual = arr2(&[[0., -3.0, -12.0], [-3.0, 0., -3.0], [-12.0, -3.0, 0.]]);
+        Zip::from(&s)
+            .and(&actual)
+            .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-8));
+    }
+}
