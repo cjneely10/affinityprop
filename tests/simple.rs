@@ -11,6 +11,5 @@ mod test {
         let mut ap = AffinityPropagation::default();
         let results = ap.predict(x, &y, Euclidean::default());
         assert!(results.len() == 1 && results.contains_key(&"2"));
-        ap.display_results(&results);
     }
 }

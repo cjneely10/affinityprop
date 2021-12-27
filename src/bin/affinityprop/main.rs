@@ -6,7 +6,7 @@ use std::process::exit;
 
 use affinityprop::{AffinityPropagation, Euclidean};
 
-use crate::ops::from_file;
+use crate::ops::{display_results, from_file};
 
 mod ops;
 
@@ -80,7 +80,7 @@ fn main() {
                 preference,
             );
             let results = ap.predict(x, &y, Euclidean::default());
-            ap.display_results(&results);
+            display_results(ap.converged(), &results);
         }
         _ => {
             let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
@@ -92,7 +92,7 @@ fn main() {
                 preference as f32,
             );
             let results = ap.predict(x, &y, Euclidean::default());
-            ap.display_results(&results);
+            display_results(ap.converged(), &results);
         }
     };
 }

@@ -1,4 +1,5 @@
-use std::fmt::Debug;
+use std::collections::HashMap;
+use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -53,4 +54,27 @@ where
             });
         });
     (out, labels)
+}
+
+pub(crate) fn display_results<L>(converged: bool, results: &HashMap<&L, Vec<&L>>)
+where
+    L: Display + Clone + ToString,
+{
+    println!(
+        "Converged={} nClusters={} nSamples={}",
+        converged,
+        results.len(),
+        results.iter().map(|(_, v)| v.len()).sum::<usize>()
+    );
+    results.iter().enumerate().for_each(|(idx, (key, value))| {
+        println!(">Cluster={} size={} exemplar={}", idx + 1, value.len(), key);
+        println!(
+            "{}",
+            value
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>()
+                .join(",")
+        );
+    });
 }
