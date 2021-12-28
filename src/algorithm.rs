@@ -15,6 +15,23 @@ impl<F> Calculation<F>
 where
     F: Float + Send + Sync,
 {
+    pub(crate) fn new(damping: F, preference: F, s: Array2<F>) -> Self {
+        let s_dim = s.dim();
+        let mut calculation = Self {
+            similarity: s,
+            responsibility: Array2::zeros(s_dim),
+            availability: Array2::zeros(s_dim),
+            damping,
+        };
+        calculation.add_preference_to_sim(preference);
+        calculation
+    }
+
+    pub(crate) fn update(&mut self) {
+        self.update_r();
+        self.update_a();
+    }
+
     pub(crate) fn generate_exemplars(&self) -> HashSet<usize> {
         let idx = Array1::<F>::range(
             F::from(0.).unwrap(),
@@ -77,13 +94,13 @@ where
         exemplar_map
     }
 
-    pub(crate) fn add_preference_to_sim(&mut self, preference: F) {
+    fn add_preference_to_sim(&mut self, preference: F) {
         self.similarity
             .diag_mut()
             .par_map_inplace(|v| *v = preference);
     }
 
-    pub(crate) fn update_r(&mut self) {
+    fn update_r(&mut self) {
         let mut tmp: Array2<F> = Array2::zeros(self.similarity.dim());
         Zip::from(&mut tmp)
             .and(&self.similarity)
@@ -129,7 +146,7 @@ where
             .par_for_each(|r, &t| *r = *r + t);
     }
 
-    pub(crate) fn update_a(&mut self) {
+    fn update_a(&mut self) {
         let mut tmp = self.responsibility.clone();
         let zero = F::from(0.).unwrap();
         tmp.par_map_inplace(|v| {

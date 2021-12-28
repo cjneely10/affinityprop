@@ -13,6 +13,7 @@ where
 pub struct NegEuclidean;
 
 impl Default for NegEuclidean {
+    /// Perform similarity calculation as -1 * sum((row_i - row_j)**2)
     fn default() -> Self {
         NegEuclidean {}
     }

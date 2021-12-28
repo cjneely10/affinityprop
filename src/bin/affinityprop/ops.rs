@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{stdout, BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -56,25 +56,48 @@ where
     (out, labels)
 }
 
-pub(crate) fn display_results<L>(converged: bool, results: &HashMap<&L, Vec<&L>>)
-where
+pub(crate) fn display_results<L>(
+    converged: bool,
+    results: &HashMap<usize, Vec<usize>>,
+    labels: &[L],
+) where
     L: Display + Clone + ToString,
 {
-    println!(
-        "Converged={} nClusters={} nSamples={}",
-        converged,
-        results.len(),
-        results.iter().map(|(_, v)| v.len()).sum::<usize>()
-    );
+    let mut writer = BufWriter::new(stdout());
+    writer
+        .write(
+            &format!(
+                "Converged={} nClusters={} nSamples={}\n",
+                converged,
+                results.len(),
+                results.iter().map(|(_, v)| v.len()).sum::<usize>()
+            )
+            .as_bytes(),
+        )
+        .unwrap();
     results.iter().enumerate().for_each(|(idx, (key, value))| {
-        println!(">Cluster={} size={} exemplar={}", idx + 1, value.len(), key);
-        println!(
-            "{}",
-            value
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<String>>()
-                .join(",")
-        );
+        writer
+            .write(
+                &format!(
+                    ">Cluster={} size={} exemplar={}\n",
+                    idx + 1,
+                    value.len(),
+                    labels[*key]
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        writer
+            .write(
+                &value
+                    .iter()
+                    .map(|v| labels[*v].to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+                    .as_bytes(),
+            )
+            .unwrap();
+        writer.write(b"\n").unwrap();
     });
+    writer.flush().unwrap();
 }
