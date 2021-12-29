@@ -5,23 +5,36 @@ pub trait Similarity<F>
 where
     F: Float + Send + Sync,
 {
-    fn similarity(self, x: Array2<F>) -> Array2<F>;
+    /// Generate an N x N matrix in which each (i,j) index represents the
+    /// similarity between row i and row j of `x`
+    fn similarity(&self, x: &Array2<F>) -> Array2<F>;
 }
 
-pub struct Euclidean;
+pub struct NegEuclidean;
 
-impl Default for Euclidean {
+impl Default for NegEuclidean {
+    /// Perform similarity calculation as -1 * sum((row_i - row_j)**2)
     fn default() -> Self {
-        Euclidean {}
+        NegEuclidean {}
     }
 }
 
-impl<F> Similarity<F> for Euclidean
+impl<F> Similarity<F> for NegEuclidean
 where
     F: Float + Send + Sync,
 {
-    /// Row-by-row similarity calculation using negative euclidean distance
-    fn similarity(self, x: Array2<F>) -> Array2<F> {
+    /// Negative euclidean similarity
+    ///
+    ///     # use ndarray::{arr2, Zip};
+    ///     # use affinityprop::{NegEuclidean, Similarity};
+    ///
+    ///     let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+    ///     let s = NegEuclidean::default().similarity(&x);
+    ///     let actual = arr2(&[[0., -3.0, -12.0], [-3.0, 0., -3.0], [-12.0, -3.0, 0.]]);
+    ///     Zip::from(&s)
+    ///         .and(&actual)
+    ///         .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-8));
+    fn similarity(&self, x: &Array2<F>) -> Array2<F> {
         let x_dim = x.dim();
         let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
         let neg_one = F::from(-1.).unwrap();
@@ -43,13 +56,14 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{Euclidean, Similarity};
     use ndarray::{arr2, Zip};
+
+    use crate::{NegEuclidean, Similarity};
 
     #[test]
     fn valid_similarity() {
         let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
-        let s = Euclidean::default().similarity(x);
+        let s = NegEuclidean::default().similarity(&x);
         let actual = arr2(&[[0., -3.0, -12.0], [-3.0, 0., -3.0], [-12.0, -3.0, 0.]]);
         Zip::from(&s)
             .and(&actual)

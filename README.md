@@ -98,7 +98,6 @@ and around a 20-30% reduction in 64-bit mode (i.e., when run using the `-r f64` 
 Results are printed to stdout in the format:
 
 ```text
-Config { ... }
 Converged=true/false nClusters=NC nSamples=NS
 >Cluster=n size=N exemplar=i
 [comma-separated cluster members]
