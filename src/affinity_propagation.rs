@@ -141,6 +141,24 @@ mod test {
         let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
         let ap = AffinityPropagation::default();
         let (converged, results) = ap.predict(&x, NegEuclidean::default());
-        assert!(converged && results.len() == 1 && results.contains_key(&1));
+        assert!(converged);
+        assert_eq!(1, results.len());
+        assert!(results.contains_key(&1));
+    }
+
+    #[test]
+    fn larger() {
+        let x: Array2<f32> = arr2(&[
+            [3., 4., 3., 2., 1.],
+            [4., 3., 5., 1., 1.],
+            [3., 5., 3., 3., 3.],
+            [2., 1., 3., 3., 2.,],
+            [1., 1., 3., 2., 3.]
+        ]);
+        let ap = AffinityPropagation::default();
+        let (converged, results) = ap.predict(&x, NegEuclidean::default());
+        assert!(converged);
+        assert_eq!(1, results.len());
+        assert!(results.contains_key(&0));
     }
 }

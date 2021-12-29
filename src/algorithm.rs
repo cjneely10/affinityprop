@@ -38,11 +38,7 @@ where
     }
 
     pub(crate) fn generate_exemplars(&self) -> HashSet<usize> {
-        let idx = Array1::<F>::range(
-            F::from(0.).unwrap(),
-            F::from(self.similarity.dim().0).unwrap(),
-            F::from(1.).unwrap(),
-        );
+        let idx = self.generate_idx();
         let zero = F::from(0.).unwrap();
         let values: Vec<isize> = Vec::from_iter(
             Zip::from(&self.responsibility.diag())
@@ -68,11 +64,7 @@ where
         sol_map: HashSet<usize>,
     ) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, vec![])));
-        let idx = Array1::range(
-            F::from(0.).unwrap(),
-            F::from(self.similarity.dim().0).unwrap(),
-            F::from(1.).unwrap(),
-        );
+        let idx = self.generate_idx();
         let max_results = Zip::from(&idx)
             .and(self.similarity.axis_iter(Axis(1)))
             .par_map_collect(|&i, col| {
@@ -97,6 +89,14 @@ where
             .into_iter()
             .for_each(|max_val| exemplar_map.get_mut(&max_val.0).unwrap().push(max_val.1));
         exemplar_map
+    }
+
+    fn generate_idx(&self) -> Array1<F> {
+        Array1::range(
+            F::from(0.).unwrap(),
+            F::from(self.similarity.dim().0).unwrap(),
+            F::from(1.).unwrap(),
+        )
     }
 
     fn update_r(&mut self) {
@@ -199,15 +199,60 @@ where
 
 #[cfg(test)]
 mod test {
-    fn valid_update_r() {
-        todo!()
+    use crate::algorithm::APAlgorithm;
+    use ndarray::{arr2, Array2};
+    use rayon::ThreadPool;
+    use std::collections::{HashMap, HashSet};
+
+    fn pool(t: usize) -> ThreadPool {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(t)
+            .build()
+            .unwrap()
     }
 
-    fn valid_update_a() {
-        todo!()
+    fn test_data() -> Array2<f32> {
+        arr2(&[
+            [-0., -7., -6., -12., -17.],
+            [-7., -0., -17., -17., -22.],
+            [-6., -17., -0., -18., -21.],
+            [-12., -17., -18., -0., -3.],
+            [-17., -22., -21., -3., -0.],
+        ])
     }
 
+    #[test]
+    fn valid_select_exemplars() {
+        pool(2).scope(move |_| {
+            let sim = test_data();
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., -22., sim);
+            calc.update();
+            let exemplars = calc.generate_exemplars();
+            let actual: HashSet<usize> = HashSet::from([0]);
+            assert!(actual.len() == exemplars.len() && actual.iter().all(|v| exemplars.contains(v)));
+        });
+    }
+
+    #[test]
     fn valid_gather_members() {
-        todo!()
+        pool(2).scope(move |_| {
+            let sim = test_data();
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., -22., sim);
+            calc.update();
+            let exemplars = calc.generate_exemplar_map(calc.generate_exemplars());
+            let actual: HashMap<usize, Vec<usize>> = HashMap::from([(0, vec![0, 1, 2, 3, 4])]);
+            assert!(
+                actual.len() == exemplars.len()
+                    && actual.iter().all(|(idx, values)| {
+                    if !exemplars.contains_key(idx) {
+                        return false;
+                    }
+                    let v: HashSet<usize> = HashSet::from_iter(values.iter().map(|v| v.clone()));
+                    let a: HashSet<usize> =
+                        HashSet::from_iter(exemplars.get(idx).unwrap().iter().map(|v| v.clone()));
+                    return v.len() == a.len() && v.iter().all(|p| v.contains(p));
+                })
+            );
+        });
     }
 }
