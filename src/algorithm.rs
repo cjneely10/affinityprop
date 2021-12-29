@@ -207,10 +207,6 @@ mod test {
         todo!()
     }
 
-    fn valid_select_exemplars() {
-        todo!()
-    }
-
     fn valid_gather_members() {
         todo!()
     }

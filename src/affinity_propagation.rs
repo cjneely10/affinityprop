@@ -45,7 +45,7 @@ where
     /// Create new model with provided parameters
     ///
     /// - preference: non-positive number representing a data point's desire to be its own exemplar
-    /// - damping: 0 <= damping <= 1
+    /// - damping: 0 < damping < 1
     /// - threads: parallel threads for analysis
     /// - convergence_iter: number of iterations to run before checking for convergence
     /// - max_iterations: total allowed iterations
@@ -57,7 +57,7 @@ where
         max_iterations: usize,
     ) -> Self {
         assert!(
-            damping >= F::from(0.).unwrap() && damping <= F::from(1.).unwrap(),
+            damping > F::from(0.).unwrap() && damping < F::from(1.).unwrap(),
             "invalid damping value provided"
         );
         assert!(
