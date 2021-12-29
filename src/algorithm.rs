@@ -83,7 +83,7 @@ where
                         return (v.0, i);
                     }
                 }
-                return (col_data[0].0, i);
+                unreachable!()
             });
         max_results
             .into_iter()
