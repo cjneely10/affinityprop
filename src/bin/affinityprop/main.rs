@@ -20,7 +20,7 @@ fn main() {
         (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Non-positive preference, default=-10.0")
         (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
-        (@arg DAMPING: -d --damping +takes_value "Damping value in range [0, 1], default=0.9")
+        (@arg DAMPING: -d --damping +takes_value "Damping value in range (0, 1), default=0.9")
         (@arg THREADS: -t --threads +takes_value "Number of worker threads, default=4")
         (@arg PRECISION: -r --precision +takes_value "Set f32 or f64 precision, default=f32")
     )
@@ -57,7 +57,7 @@ fn main() {
         .unwrap_or("0.9")
         .parse::<f32>()
         .expect("Unable to parse damping");
-    if damping < 0. || damping > 1. || preference > 0. {
+    if damping <= 0. || damping >= 1. || preference > 0. {
         eprintln!("Improper parameter set!");
         exit(2);
     }
