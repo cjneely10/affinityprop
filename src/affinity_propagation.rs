@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ndarray::Array2;
 use num_traits::Float;
 
-use crate::algorithm::Calculation;
+use crate::algorithm::APAlgorithm;
 use crate::similarity::Similarity;
 
 /// Implementation derived from sklearn AffinityPropagation implementation
@@ -77,6 +77,9 @@ where
     /// - x: 2-D array of (rows=samples, cols=attr_values)
     /// - s: Similarity calculator -> must generate an N x N matrix
     ///
+    /// Results will be calculated using the floating-point precision defined
+    /// by the input data
+    ///
     /// Returns:
     ///
     /// - True/False if algorithm converged to a set of exemplars
@@ -89,14 +92,13 @@ where
     ///     let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
     ///     let ap = AffinityPropagation::default();
     ///     let (converged, results) = ap.predict(&x, NegEuclidean::default());
-    ///     assert!(results.len() == 1 && results.contains_key(&1) && converged);
+    ///     assert!(converged && results.len() == 1 && results.contains_key(&1));
     pub fn predict<S>(&self, x: &Array2<F>, s: S) -> (bool, HashMap<usize, Vec<usize>>)
     where
         S: Similarity<F>,
     {
         let s = s.similarity(x);
-        let s_dim = s.dim();
-        assert_eq!(s_dim.0, s_dim.1, "similarity dim must be NxN");
+        assert!(s.is_square(), "similarity dim must be NxN");
 
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(self.threads)
@@ -104,7 +106,7 @@ where
             .unwrap();
         pool.scope(move |_| {
             let mut has_converged = false;
-            let mut calculation = Calculation::new(self.damping, self.preference, s);
+            let mut calculation = APAlgorithm::new(self.damping, self.preference, s);
             for _ in 0..self.convergence_iter {
                 calculation.update();
             }

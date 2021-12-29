@@ -20,7 +20,7 @@ where
     F: Float + Default + FromStr,
     <F as FromStr>::Err: Debug,
 {
-    let reader = BufReader::new(File::open(p).unwrap());
+    let reader = BufReader::new(File::open(p).expect("Unable to open file"));
     let mut labels = Vec::new();
     let mut data = Vec::new();
     // Read tab-delimited file
@@ -61,43 +61,103 @@ pub(crate) fn display_results<L>(
     results: &HashMap<usize, Vec<usize>>,
     labels: &[L],
 ) where
-    L: Display + Clone + ToString,
+    L: Display + AsRef<[u8]>,
 {
     let mut writer = BufWriter::new(stdout());
+    // Output header
     writer
         .write(
-            &format!(
+            format!(
                 "Converged={} nClusters={} nSamples={}\n",
                 converged,
                 results.len(),
                 results.iter().map(|(_, v)| v.len()).sum::<usize>()
             )
-            .as_bytes(),
+            .as_ref(),
         )
         .unwrap();
     results.iter().enumerate().for_each(|(idx, (key, value))| {
+        // Write each exemplar
         writer
             .write(
-                &format!(
+                format!(
                     ">Cluster={} size={} exemplar={}\n",
                     idx + 1,
                     value.len(),
                     labels[*key]
                 )
-                .as_bytes(),
+                .as_ref(),
             )
             .unwrap();
-        writer
-            .write(
-                &value
-                    .iter()
-                    .map(|v| labels[*v].to_string())
-                    .collect::<Vec<String>>()
-                    .join(",")
-                    .as_bytes(),
-            )
-            .unwrap();
+        // Write exemplar members
+        let mut it = value.iter();
+        writer.write(labels[*it.next().unwrap()].as_ref()).unwrap();
+        it.for_each(|v| {
+            writer.write(b",").unwrap();
+            writer.write(labels[*v].as_ref()).unwrap();
+        });
         writer.write(b"\n").unwrap();
     });
     writer.flush().unwrap();
+}
+
+#[cfg(test)]
+mod test {
+    use crate::from_file;
+    use ndarray::arr2;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn valid_load() {
+        // Write tempdata
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id2", "2.0", "4.0", "2.0").unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id3", "3.0", "3.0", "3.0").unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id4", "4.0", "2.0", "4.0").unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id5", "5.0", "1.0", "5.0").unwrap();
+        // Read into starting data
+        let (data, labels) = from_file::<f32>(file.path().to_path_buf());
+        // Validate ids
+        for i in 0..5 {
+            assert_eq!("id".to_string() + &(i + 1).to_string(), labels[i as usize]);
+        }
+        // Validate remaining
+        let expected = arr2(&[
+            [1., 5., 1.],
+            [2., 4., 2.],
+            [3., 3., 3.],
+            [4., 2., 4.],
+            [5., 1., 5.],
+        ]);
+        assert_eq!(data, expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_load_empty_file() {
+        let file = NamedTempFile::new().unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf());
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_load_mismatched_data() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
+        writeln!(file, "{}\t{}\t{}", "id2", "2.0", "4.0").unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf());
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_load_invalid_data() {
+        // Write tempdata
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
+        writeln!(file, "{}\t{}\t{}\t{}", "id2", "a", "b", "c").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf());
+    }
 }

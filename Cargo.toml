@@ -10,3 +10,6 @@ ndarray = { version = "0.15.4", features = ["rayon"] }
 rayon = "1.5"
 clap = "~2.27.0"
 num-traits = "0.2.14"
+
+[dev-dependencies]
+tempfile = "3"

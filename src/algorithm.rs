@@ -4,14 +4,15 @@ use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use num_traits::Float;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-pub(crate) struct Calculation<F> {
-    pub(crate) similarity: Array2<F>,
-    pub(crate) responsibility: Array2<F>,
-    pub(crate) availability: Array2<F>,
-    pub(crate) damping: F,
+pub(crate) struct APAlgorithm<F> {
+    similarity: Array2<F>,
+    responsibility: Array2<F>,
+    availability: Array2<F>,
+    damping: F,
+    neg_inf: F,
 }
 
-impl<F> Calculation<F>
+impl<F> APAlgorithm<F>
 where
     F: Float + Send + Sync,
 {
@@ -22,8 +23,12 @@ where
             responsibility: Array2::zeros(s_dim),
             availability: Array2::zeros(s_dim),
             damping,
+            neg_inf: F::from(-1.).unwrap() * F::infinity(),
         };
-        calculation.add_preference_to_sim(preference);
+        calculation
+            .similarity
+            .diag_mut()
+            .par_map_inplace(|v| *v = preference);
         calculation
     }
 
@@ -94,12 +99,6 @@ where
         exemplar_map
     }
 
-    fn add_preference_to_sim(&mut self, preference: F) {
-        self.similarity
-            .diag_mut()
-            .par_map_inplace(|v| *v = preference);
-    }
-
     fn update_r(&mut self) {
         let mut tmp: Array2<F> = Array2::zeros(self.similarity.dim());
         Zip::from(&mut tmp)
@@ -113,11 +112,10 @@ where
         let max_idx: Array1<usize> = combined.iter().map(|c| c.0).collect();
         let max1: Array1<F> = combined.iter().map(|c| c.1).collect();
 
-        let neg_inf = F::from(-1.).unwrap() * F::from(f64::INFINITY).unwrap();
         Zip::from(tmp.axis_iter_mut(Axis(1)))
             .and(&max_idx)
             .par_for_each(|mut t, &m| {
-                t[m] = neg_inf;
+                t[m] = self.neg_inf;
             });
 
         let max2 = Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);

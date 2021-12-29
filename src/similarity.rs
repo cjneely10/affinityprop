@@ -23,6 +23,17 @@ impl<F> Similarity<F> for NegEuclidean
 where
     F: Float + Send + Sync,
 {
+    /// Negative euclidean similarity
+    ///
+    ///     # use ndarray::{arr2, Zip};
+    ///     # use affinityprop::{NegEuclidean, Similarity};
+    ///
+    ///     let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+    ///     let s = NegEuclidean::default().similarity(&x);
+    ///     let actual = arr2(&[[0., -3.0, -12.0], [-3.0, 0., -3.0], [-12.0, -3.0, 0.]]);
+    ///     Zip::from(&s)
+    ///         .and(&actual)
+    ///         .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-8));
     fn similarity(&self, x: &Array2<F>) -> Array2<F> {
         let x_dim = x.dim();
         let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
