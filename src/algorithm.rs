@@ -229,7 +229,9 @@ mod test {
             calc.update();
             let exemplars = calc.generate_exemplars();
             let actual: HashSet<usize> = HashSet::from([0]);
-            assert!(actual.len() == exemplars.len() && actual.iter().all(|v| exemplars.contains(v)));
+            assert!(
+                actual.len() == exemplars.len() && actual.iter().all(|v| exemplars.contains(v))
+            );
         });
     }
 
@@ -244,14 +246,16 @@ mod test {
             assert!(
                 actual.len() == exemplars.len()
                     && actual.iter().all(|(idx, values)| {
-                    if !exemplars.contains_key(idx) {
-                        return false;
-                    }
-                    let v: HashSet<usize> = HashSet::from_iter(values.iter().map(|v| v.clone()));
-                    let a: HashSet<usize> =
-                        HashSet::from_iter(exemplars.get(idx).unwrap().iter().map(|v| v.clone()));
-                    return v.len() == a.len() && v.iter().all(|p| v.contains(p));
-                })
+                        if !exemplars.contains_key(idx) {
+                            return false;
+                        }
+                        let v: HashSet<usize> =
+                            HashSet::from_iter(values.iter().map(|v| v.clone()));
+                        let a: HashSet<usize> = HashSet::from_iter(
+                            exemplars.get(idx).unwrap().iter().map(|v| v.clone()),
+                        );
+                        return v.len() == a.len() && v.iter().all(|p| v.contains(p));
+                    })
             );
         });
     }

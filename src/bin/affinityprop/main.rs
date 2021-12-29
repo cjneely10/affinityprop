@@ -35,28 +35,43 @@ fn main() {
         .value_of("MAX_ITER")
         .unwrap_or("100")
         .parse::<usize>()
-        .expect("Unable to parse max_iterations");
+        .unwrap_or_else(|_| {
+            eprintln!("Unable to parse max_iterations");
+            exit(1);
+        });
     let convergence_iter = matches
         .value_of("CONV_ITER")
         .unwrap_or("10")
         .parse::<usize>()
-        .expect("Unable to parse convergence_iter");
+        .unwrap_or_else(|_| {
+            eprintln!("Unable to parse convergence_iter");
+            exit(1);
+        });
     let threads = matches
         .value_of("THREADS")
         .unwrap_or("4")
         .parse::<usize>()
-        .expect("Unable to parse threads");
+        .unwrap_or_else(|_| {
+            eprintln!("Unable to parse threads");
+            exit(1);
+        });
     let precision = matches.value_of("PRECISION").unwrap_or("f32");
     let preference = matches
         .value_of("PREF")
         .unwrap_or("-10.0")
         .parse::<f32>()
-        .expect("Unable to parse preference");
+        .unwrap_or_else(|_| {
+            eprintln!("Unable to parse preference");
+            exit(1);
+        });
     let damping = matches
         .value_of("DAMPING")
         .unwrap_or("0.9")
         .parse::<f32>()
-        .expect("Unable to parse damping");
+        .unwrap_or_else(|_| {
+            eprintln!("Unable to parse damping");
+            exit(1);
+        });
     if damping <= 0. || damping >= 1. || preference > 0. {
         eprintln!("Improper parameter set!");
         exit(2);

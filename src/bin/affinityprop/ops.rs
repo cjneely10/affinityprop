@@ -27,11 +27,23 @@ where
     reader.lines().map(|l| l.unwrap()).for_each(|line| {
         let mut line = line.split('\t');
         // ID as first col
-        labels.push(line.next().expect("Error loading line label").to_string());
+        labels.push(
+            line.next()
+                .unwrap_or_else(|| {
+                    eprintln!("Error loading line label");
+                    panic!()
+                })
+                .to_string(),
+        );
         // Rest are data
         data.push(
-            line.map(|s| s.parse::<F>().expect("Error parsing data in file"))
-                .collect::<Vec<F>>(),
+            line.map(|s| {
+                s.parse::<F>().unwrap_or_else(|_| {
+                    eprintln!("Error parsing data in file");
+                    panic!()
+                })
+            })
+            .collect::<Vec<F>>(),
         );
     });
     // Validate data was loaded
