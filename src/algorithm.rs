@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use num_traits::Float;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 pub(crate) struct APAlgorithm<F> {
     similarity: Array2<F>,
@@ -51,12 +50,7 @@ where
                     return -1;
                 }),
         );
-        let values: Vec<usize> = values
-            .par_iter()
-            .filter(|v| **v >= 0)
-            .map(|c| *c as usize)
-            .collect();
-        HashSet::from_iter(values.into_iter())
+        HashSet::from_iter(values.into_iter().filter(|v| *v >= 0).map(|c| c as usize))
     }
 
     pub(crate) fn generate_exemplar_map(
