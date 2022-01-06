@@ -47,7 +47,7 @@ where
                     if r + a > zero {
                         return i.to_isize().unwrap();
                     }
-                    return -1;
+                    -1
                 }),
         );
         HashSet::from_iter(values.into_iter().filter(|v| *v >= 0).map(|c| c as usize))
@@ -67,8 +67,7 @@ where
                     return (i, i);
                 }
                 // Collect into (idx, value)
-                let mut col_data: Vec<(usize, F)> =
-                    col.into_iter().map(|v| v.clone()).enumerate().collect();
+                let mut col_data: Vec<(usize, F)> = col.into_iter().copied().enumerate().collect();
                 // Sort by value
                 col_data.sort_by(|&v1, &v2| v2.1.partial_cmp(&v1.1).unwrap());
                 // Return highest value that is present in exemplar map keys
