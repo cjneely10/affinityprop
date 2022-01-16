@@ -117,10 +117,12 @@ pub(crate) fn display_results<L>(
 
 #[cfg(test)]
 mod test {
-    use crate::from_file;
-    use ndarray::arr2;
     use std::io::Write;
+
+    use ndarray::arr2;
     use tempfile::NamedTempFile;
+
+    use crate::from_file;
 
     #[test]
     fn valid_load() {

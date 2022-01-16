@@ -120,7 +120,8 @@ where
             for _ in self.convergence_iter..self.max_iterations {
                 calculation.update();
                 let sol_map = calculation.generate_exemplars();
-                if final_exemplars.len() == sol_map.len()
+                if sol_map.len() > 0
+                    && final_exemplars.len() == sol_map.len()
                     && final_exemplars.iter().all(|k| sol_map.contains(k))
                 {
                     has_converged = true;
@@ -140,7 +141,7 @@ where
 mod test {
     use ndarray::{arr2, Array2};
 
-    use crate::{AffinityPropagation, NegEuclidean};
+    use crate::{AffinityPropagation, NegCosine, NegEuclidean};
 
     #[test]
     fn simple() {
@@ -150,6 +151,24 @@ mod test {
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&1));
+    }
+
+    #[test]
+    fn with_cosine() {
+        let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
+        let ap = AffinityPropagation::default();
+        let (converged, results) = ap.predict(&x, NegCosine::default());
+        assert!(converged);
+        assert_eq!(1, results.len());
+        assert!(results.contains_key(&0));
+    }
+
+    #[test]
+    fn with_cosine_unconverged() {
+        let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+        let ap = AffinityPropagation::default();
+        let (converged, _) = ap.predict(&x, NegCosine::default());
+        assert!(!converged);
     }
 
     #[test]

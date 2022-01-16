@@ -58,6 +58,9 @@ where
         sol_map: HashSet<usize>,
     ) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, vec![])));
+        if exemplar_map.is_empty() {
+            return exemplar_map;
+        }
         let idx = self.generate_idx();
         let max_results = Zip::from(&idx)
             .and(self.similarity.axis_iter(Axis(1)))
@@ -192,10 +195,12 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::algorithm::APAlgorithm;
+    use std::collections::{HashMap, HashSet};
+
     use ndarray::{arr2, Array2};
     use rayon::ThreadPool;
-    use std::collections::{HashMap, HashSet};
+
+    use crate::algorithm::APAlgorithm;
 
     fn pool(t: usize) -> ThreadPool {
         rayon::ThreadPoolBuilder::new()
