@@ -78,7 +78,7 @@ pub(crate) fn display_results<L>(
     let mut writer = BufWriter::new(stdout());
     // Output header
     writer
-        .write(
+        .write_all(
             format!(
                 "Converged={} nClusters={} nSamples={}\n",
                 converged,
@@ -91,7 +91,7 @@ pub(crate) fn display_results<L>(
     results.iter().enumerate().for_each(|(idx, (key, value))| {
         // Write each exemplar
         writer
-            .write(
+            .write_all(
                 format!(
                     ">Cluster={} size={} exemplar={}\n",
                     idx + 1,
@@ -103,12 +103,14 @@ pub(crate) fn display_results<L>(
             .unwrap();
         // Write exemplar members
         let mut it = value.iter();
-        writer.write(labels[*it.next().unwrap()].as_ref()).unwrap();
+        writer
+            .write_all(labels[*it.next().unwrap()].as_ref())
+            .unwrap();
         it.for_each(|v| {
-            writer.write(b",").unwrap();
-            writer.write(labels[*v].as_ref()).unwrap();
+            writer.write_all(b",").unwrap();
+            writer.write_all(labels[*v].as_ref()).unwrap();
         });
-        writer.write(b"\n").unwrap();
+        writer.write_all(b"\n").unwrap();
     });
     writer.flush().unwrap();
 }
@@ -124,11 +126,11 @@ mod test {
     fn valid_load() {
         // Write tempdata
         let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id2", "2.0", "4.0", "2.0").unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id3", "3.0", "3.0", "3.0").unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id4", "4.0", "2.0", "4.0").unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id5", "5.0", "1.0", "5.0").unwrap();
+        writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
+        writeln!(file, "id2\t2.0\t4.0\t2.0").unwrap();
+        writeln!(file, "id3\t3.0\t3.0\t3.0").unwrap();
+        writeln!(file, "id4\t4.0\t2.0\t4.0").unwrap();
+        writeln!(file, "id5\t5.0\t1.0\t5.0").unwrap();
         // Read into starting data
         let (data, labels) = from_file::<f32>(file.path().to_path_buf());
         // Validate ids
@@ -157,9 +159,9 @@ mod test {
     #[should_panic]
     fn invalid_load_mismatched_data() {
         let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
-        writeln!(file, "{}\t{}\t{}", "id2", "2.0", "4.0").unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
+        writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
+        writeln!(file, "id2\t2.0\t4.0").unwrap();
+        writeln!(file, "id3\t1.0\t5.0\t1.0").unwrap();
         let (_, _) = from_file::<f32>(file.path().to_path_buf());
     }
 
@@ -168,8 +170,8 @@ mod test {
     fn invalid_load_invalid_data() {
         // Write tempdata
         let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id1", "1.0", "5.0", "1.0").unwrap();
-        writeln!(file, "{}\t{}\t{}\t{}", "id2", "a", "b", "c").unwrap();
+        writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
+        writeln!(file, "id2\ta\tb\tc").unwrap();
         let (_, _) = from_file::<f32>(file.path().to_path_buf());
     }
 }

@@ -6,11 +6,26 @@ use num_traits::Float;
 use crate::algorithm::APAlgorithm;
 use crate::similarity::Similarity;
 
-/// Implementation derived from sklearn AffinityPropagation implementation
-/// <https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38>
+/// A model whose parameters will be used to cluster data into exemplars.
+///
+/// - preference: A non-positive number representing a data point's desire to be its own exemplar.
+/// - damping: The extent to which the current availability/responsibility is modified in an update.
+/// - threads: The number of workers that will operate on the data.
+/// - convergence_iter: The number of iterations to complete before checking for convergence.
+/// - max_iterations: The total number of iterations to attempt.
+///
+/// Example:
+///
+///     # use ndarray::{arr2, Array2};
+///     # use affinityprop::{AffinityPropagation, NegEuclidean};
+///     let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+///     let ap = AffinityPropagation::default();
+///     let (converged, results) = ap.predict(&x, NegEuclidean::default());
+///     assert!(converged && results.len() == 1 && results.contains_key(&1));
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct AffinityPropagation<F> {
-    damping: F,
     preference: F,
+    damping: F,
     threads: usize,
     convergence_iter: usize,
     max_iterations: usize,
@@ -22,18 +37,18 @@ where
 {
     /// Create new model with default parameters
     ///
-    /// - damping: 0.5
     /// - preference: -10.0
+    /// - damping: 0.5
     /// - threads: 4
     /// - convergence_iter: 10
     /// - max_iterations: 100
     fn default() -> Self {
         Self {
+            preference: F::from(-10.0).unwrap(),
             damping: F::from(0.5).unwrap(),
             threads: 4,
-            max_iterations: 100,
             convergence_iter: 10,
-            preference: F::from(-10.0).unwrap(),
+            max_iterations: 100,
         }
     }
 }
@@ -84,15 +99,6 @@ where
     ///
     /// - True/False if algorithm converged to a set of exemplars
     /// - Map where K:V are exemplar_index:{member_indices}
-    ///
-    /// Example:
-    ///
-    ///     # use ndarray::{arr2, Array2};
-    ///     # use affinityprop::{AffinityPropagation, NegEuclidean};
-    ///     let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
-    ///     let ap = AffinityPropagation::default();
-    ///     let (converged, results) = ap.predict(&x, NegEuclidean::default());
-    ///     assert!(converged && results.len() == 1 && results.contains_key(&1));
     pub fn predict<S>(&self, x: &Array2<F>, s: S) -> (bool, HashMap<usize, Vec<usize>>)
     where
         S: Similarity<F>,

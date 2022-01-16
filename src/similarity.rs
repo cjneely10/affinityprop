@@ -1,6 +1,7 @@
 use ndarray::{Array2, Axis};
 use num_traits::Float;
 
+/// Determine the N x N similarity matrix for a collection of data.
 pub trait Similarity<F>
 where
     F: Float + Send + Sync,
@@ -10,30 +11,24 @@ where
     fn similarity(&self, x: &Array2<F>) -> Array2<F>;
 }
 
+/// Perform similarity calculation as -1 * sum((row_i - row_j)**2)
+///
+///     use ndarray::{arr2, Zip};
+///     # use affinityprop::{NegEuclidean, Similarity};
+///
+///     let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+///     let s = NegEuclidean::default().similarity(&x);
+///     let actual = arr2(&[[0., -3.0, -12.0], [-3.0, 0., -3.0], [-12.0, -3.0, 0.]]);
+///     Zip::from(&s)
+///         .and(&actual)
+///         .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-8));
+#[derive(Debug, Default, Clone)]
 pub struct NegEuclidean;
-
-impl Default for NegEuclidean {
-    /// Perform similarity calculation as -1 * sum((row_i - row_j)**2)
-    fn default() -> Self {
-        NegEuclidean {}
-    }
-}
 
 impl<F> Similarity<F> for NegEuclidean
 where
     F: Float + Send + Sync,
 {
-    /// Negative euclidean similarity
-    ///
-    ///     # use ndarray::{arr2, Zip};
-    ///     # use affinityprop::{NegEuclidean, Similarity};
-    ///
-    ///     let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
-    ///     let s = NegEuclidean::default().similarity(&x);
-    ///     let actual = arr2(&[[0., -3.0, -12.0], [-3.0, 0., -3.0], [-12.0, -3.0, 0.]]);
-    ///     Zip::from(&s)
-    ///         .and(&actual)
-    ///         .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-8));
     fn similarity(&self, x: &Array2<F>) -> Array2<F> {
         let x_dim = x.dim();
         let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
