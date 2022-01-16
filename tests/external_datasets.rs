@@ -6,10 +6,10 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use ndarray::{Array2, Axis};
+use ndarray::{Array2, ArrayView1, Axis};
 use num_traits::Float;
 
-use affinityprop::{AffinityPropagation, NegEuclidean};
+use affinityprop::{AffinityPropagation, NegCosine, NegEuclidean, Similarity};
 
 fn load_data<F>(test_file: PathBuf) -> std::io::Result<(Array2<F>, HashMap<usize, Vec<usize>>)>
 where
@@ -44,12 +44,30 @@ where
     Ok((out, test_data_map))
 }
 
-fn run_test(path: PathBuf) {
-    let (test_array, test_results) = load_data::<f32>(path).unwrap();
-    let ap = AffinityPropagation::new(-1000., 0.5, 4, 400, 4000);
-    let (converged, results) = ap.predict(&test_array, NegEuclidean::default());
+#[derive(Default, Clone)]
+struct AbsLogEuclidean;
+
+impl<F> Similarity<F> for AbsLogEuclidean
+where
+    F: Float + Send + Sync,
+{
+    fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F {
+        let mut row_diff = a - b;
+        row_diff.map_inplace(|_a| *_a = (*_a).powi(2).log2());
+        row_diff.sum().abs()
+    }
+}
+
+fn run_test<F, S>(ap: &AffinityPropagation<F>, s: S, path: PathBuf)
+where
+    F: Float + Send + Sync + FromStr + Default,
+    S: Similarity<F>,
+    <F as FromStr>::Err: Debug,
+{
+    let (test_array, actual) = load_data::<F>(path).unwrap();
+    let (converged, test_results) = ap.predict(&test_array, s);
     assert!(converged);
-    assert_eq!(test_results.len(), results.len());
+    assert_eq!(actual.len(), test_results.len());
 }
 
 fn file<A: AsRef<OsStr>>(path: A) -> PathBuf {
@@ -59,10 +77,36 @@ fn file<A: AsRef<OsStr>>(path: A) -> PathBuf {
 
 #[test]
 fn ten_exemplars() {
-    run_test(file(&"near-exemplar-10.test"));
+    let ap = AffinityPropagation::<f32>::new(Some(-1000.), 0.5, 4, 400, 4000);
+    run_test(&ap, NegEuclidean::default(), file(&"near-exemplar-10.test"));
 }
 
 #[test]
 fn fifty_exemplars() {
-    run_test(file(&"near-exemplar-50.test"));
+    let ap = AffinityPropagation::<f32>::new(Some(-1000.), 0.5, 4, 400, 4000);
+    run_test(&ap, NegEuclidean::default(), file(&"near-exemplar-50.test"));
 }
+
+// #[test]
+// fn iris() {
+//     let ap = AffinityPropagation::<f32>::new(None, 0.95, 4, 400, 4000);
+//     run_test(&ap, NegEuclidean::default(), file(&"iris.test"));
+// }
+
+#[test]
+fn breast_cancer() {
+    let ap = AffinityPropagation::<f32>::new(Some(-10000.), 0.95, 4, 400, 4000);
+    run_test(&ap, AbsLogEuclidean::default(), file(&"breast_cancer.test"))
+}
+
+// #[test]
+// fn diabetes() {
+//     let ap = AffinityPropagation::<f32>::new(None, 0.5, 4, 400, 4000);
+//     run_test(&ap, NegCosine::default(), file(&"diabetes.test"))
+// }
+
+// #[test]
+// fn digits() {
+//     let ap = AffinityPropagation::<f32>::new(-1000., 0.95, 4, 400, 4000);
+//     run_test(&ap, NegEuclidean::default(), file(&"digits.test"))
+// }
