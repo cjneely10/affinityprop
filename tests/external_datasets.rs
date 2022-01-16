@@ -9,7 +9,7 @@ use std::str::FromStr;
 use ndarray::{Array2, ArrayView1, Axis};
 use num_traits::Float;
 
-use affinityprop::{AffinityPropagation, NegCosine, NegEuclidean, Similarity};
+use affinityprop::{AffinityPropagation, NegEuclidean, Similarity};
 
 fn load_data<F>(test_file: PathBuf) -> std::io::Result<(Array2<F>, HashMap<usize, Vec<usize>>)>
 where

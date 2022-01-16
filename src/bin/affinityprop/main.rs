@@ -17,7 +17,7 @@ fn main() {
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Path to input file")
-        (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Non-positive preference, default=-10.0")
+        (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Non-positive preference, default=median pairwise similarity")
         (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
         (@arg DAMPING: -d --damping +takes_value "Damping value in range (0, 1), default=0.9")
@@ -58,10 +58,17 @@ fn main() {
     let precision = matches.value_of("PRECISION").unwrap_or("f32");
     let preference = matches.value_of("PREF");
     let preference = match preference {
-        Some(p) => Some(p.parse::<f64>().unwrap_or_else(|_| {
-            eprintln!("Unable to parse preference");
-            exit(1);
-        })),
+        Some(p) => {
+            let p = p.parse::<f64>().unwrap_or_else(|_| {
+                eprintln!("Unable to parse preference");
+                exit(1);
+            });
+            if p > 0. {
+                eprintln!("Preference must be non-positive");
+                exit(2);
+            }
+            Some(p)
+        },
         None => None,
     };
 
@@ -73,7 +80,7 @@ fn main() {
             eprintln!("Unable to parse damping");
             exit(1);
         });
-    if damping <= 0. || damping >= 1. || preference.unwrap() > 0. {
+    if damping <= 0. || damping >= 1. {
         eprintln!("Improper parameter set!");
         exit(2);
     }
@@ -98,7 +105,10 @@ fn main() {
         }
         _ => {
             let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
-            let preference = Some(preference.unwrap() as f32);
+            let preference = match preference {
+                Some(p) => Some(p as f32),
+                None => None,
+            };
             let ap = AffinityPropagation::new(
                 preference,
                 damping,
