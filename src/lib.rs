@@ -33,16 +33,20 @@
 //! ## From Rust code
 //!
 //! The `affinityprop` crate expects a type that defines how to calculate pairwise [`Similarity`]
-//! for all data points. This crate provides the [`NegEuclidean`] struct that determines the
-//! negative Euclidean distance between each point, which is defined as
-//! `-1 * sum((point_i - point_j)**2)`.
+//! for all data points. This crate provides the [`NegEuclidean`] and [`NegCosine`] structs, which
+//! are defined as `-1 * sum((point_i - point_j)**2)` and `-1 * (i . j)/(|i|*|j|)`, respectively.
 //!
-//!     use ndarray::{arr2, Array2};
-//!     use affinityprop::{AffinityPropagation, NegEuclidean};
-//!     let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+//!     # use ndarray::{arr2, Array2};
+//!     # use affinityprop::{AffinityPropagation, NegCosine, NegEuclidean};
+//!     let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
 //!     let ap = AffinityPropagation::default();
+//!
+//!     // Cluster using negative Euclidean similarity
 //!     let (converged, results) = ap.predict(&x, NegEuclidean::default());
-//!     assert!(converged && results.len() == 1 && results.contains_key(&1));
+//!     assert!(converged && results.len() == 1 && results.contains_key(&0));
+//!     // Cluster using negative cosine similarity
+//!     let (converged, results) = ap.predict(&x, NegCosine::default());
+//!     assert!(converged && results.len() == 1 && results.contains_key(&0));
 //!
 //! Users who wish to calculate similarity differently are advised that **this implementation of
 //! Affinity Propagation is only guaranteed to converge for negative similarity values**.
@@ -86,7 +90,7 @@
 //!
 
 pub use affinity_propagation::AffinityPropagation;
-pub use similarity::{NegEuclidean, Similarity};
+pub use similarity::{NegCosine, NegEuclidean, Similarity};
 
 mod affinity_propagation;
 mod algorithm;

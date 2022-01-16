@@ -1,21 +1,39 @@
 [![Rust](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml)
 [![GitHub](https://img.shields.io/github/license/cjneely10/affinityprop)](https://www.gnu.org/licenses/gpl-3.0.html)
-![affinityprop: rustc 1.53+](https://img.shields.io/badge/affinityprop-rustc__1.53-blue)
+![affinityprop: rustc 1.53+](https://img.shields.io/badge/affinityprop-rustc__1.53+-blue)
 
 # AffinityProp
 Vectorized and Parallelized Affinity Propagation
-
-## About
 
 The `affinityprop` crate provides an optimized implementation of the Affinity Propagation
 clustering algorithm, which identifies cluster of data without *a priori* knowledge about the
 number of clusters in the data.
 
-`affinityprop` also provides a command-line accessible interface.
+# About
+Affinity Propagation identifies a subset of representative examples from a dataset, known as
+**exemplars**. The original algorithm was developed by [Brendan Frey and Delbery Dueck](http://utstat.toronto.edu/reid/sta414/frey-affinity.pdf).
 
-The implementation largely mimics the [sklearn version](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AffinityPropagation.html),
-but has been implemented in Rust using the [rayon](https://crates.io/crates/rayon) 
-and [ndarray](https://crates.io/crates/ndarray) crates to allow for parallel iteration.
+Briefly, the algorithm accepts as input a matrix describing **pairwise similarity** for all data
+values. This information is used to calculate pairwise. **responsibility** and **availability**.
+Responsibility *r(i,j)* describes how well-suited point *j* is to act as an exemplar for
+point *i* when compared to other potential exemplars. Availability *a(i,j)* describes how
+appropriate is the selection of point *j* to be the exemplar for point *i* when compared to
+other exemplars.
+
+Users provide a number of **convergence iterations** to repeat the calculations, after which the
+potential exemplars are extracted from the dataset. Then, the algorithm continues to repeat
+until the exemplar values stop changing, or the **maximum iterations** are met.
+
+# Why this crate?
+The nature of Affinity Propagation demands an *O(n<sup>2</sup>)* runtime. An existing [sklearn](https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38)
+implementation is implemented using the Python library [numpy](https://numpy.org/doc/stable/index.html),
+which implements vectorized calculations. Coupled with **SIMD** instructions, this results in
+decreased user runtime.
+
+However, in applications with large input values, the *O(n<sup>2</sup>)* runtime is still
+prohibitive. This crate implements Affinity Propagation using the Rust [rayon](https://crates.io/crates/rayon)
+library, which allows for a drastic decrease in overall runtime - as much as 30-60% depending
+on floating point precision!
 
 ## Installation
 
@@ -116,9 +134,3 @@ Converged=true/false nClusters=NC nSamples=NS
 
 Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory. 
 This crate seeks to address the former, not the latter.
-
-## Algorithm Notes
-
-The original algorithm was published by [Brendan Frey and Delbert Dueck](https://www.science.org/doi/10.1126/science.1136800).
-
-
