@@ -115,10 +115,6 @@ cargo run --release --bin affinityprop -- -i ./data/Infant_gut_assembly.cov.x100
 ```
 
 ### Results
-
-Increasing thread count can see up to a 60% runtime reduction for 32-bit floating point precision,
-and around a 20-30% reduction in 64-bit mode (i.e., when run using the `-r f64` flag).
-
 Results are printed to stdout in the format:
 
 ```text

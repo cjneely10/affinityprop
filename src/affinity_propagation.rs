@@ -4,7 +4,7 @@ use ndarray::Array2;
 use num_traits::Float;
 
 use crate::algorithm::APAlgorithm;
-use crate::similarity::Similarity;
+use crate::similarity::{calculate_similarity, Similarity};
 
 /// A model whose parameters will be used to cluster data into exemplars.
 ///
@@ -103,7 +103,7 @@ where
     where
         S: Similarity<F>,
     {
-        let s = s.similarity(x);
+        let s = calculate_similarity(&x, s);
         assert!(s.is_square(), "similarity dim must be NxN");
 
         let pool = rayon::ThreadPoolBuilder::new()
@@ -151,6 +151,22 @@ mod test {
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&1));
+    }
+
+    #[test]
+    fn zero() {
+        let x: Array2<f32> = arr2(&[[]]);
+        let ap = AffinityPropagation::default();
+        let (converged, _) = ap.predict(&x, NegCosine::default());
+        assert!(!converged);
+    }
+
+    #[test]
+    fn one() {
+        let x: Array2<f32> = arr2(&[[0., 1., 0.]]);
+        let ap = AffinityPropagation::default();
+        let (converged, _) = ap.predict(&x, NegCosine::default());
+        assert!(!converged);
     }
 
     #[test]

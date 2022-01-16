@@ -54,7 +54,7 @@ fn run_test(path: PathBuf) {
 
 fn file<A: AsRef<OsStr>>(path: A) -> PathBuf {
     let test_dir = Path::new(file!()).parent().unwrap();
-    test_dir.join(Path::new("data")).join(Path::new(&path))
+    test_dir.join(Path::new("test-data")).join(Path::new(&path))
 }
 
 #[test]
@@ -63,6 +63,6 @@ fn ten_exemplars() {
 }
 
 #[test]
-fn one_hundred_exemplars() {
-    run_test(file(&"near-exemplar-100.test"));
+fn fifty_exemplars() {
+    run_test(file(&"near-exemplar-50.test"));
 }

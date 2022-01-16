@@ -169,6 +169,16 @@ mod test {
 
     #[test]
     #[should_panic]
+    fn invalid_blank_line() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
+        writeln!(file, "").unwrap();
+        writeln!(file, "id3\t1.0\t5.0\t1.0").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf());
+    }
+
+    #[test]
+    #[should_panic]
     fn invalid_load_invalid_data() {
         // Write tempdata
         let mut file = NamedTempFile::new().unwrap();
