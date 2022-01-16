@@ -10,16 +10,16 @@
 //! values. This information is used to calculate pairwise. **responsibility** and **availability**.
 //! Responsibility *`r(i,j)`* describes how well-suited point *`j`* is to act as an exemplar for
 //! point *`i`* when compared to other potential exemplars. Availability *`a(i,j)`* describes how
-//! appropriate is the selection of point *`j`* to be the exemplar for point *`i`* when compared to
+//! appropriate it is for point *i* to accept point *j* as its exemplar when compared to
 //! other exemplars.
 //!
 //! Users provide a number of **convergence iterations** to repeat the calculations, after which the
 //! potential exemplars are extracted from the dataset. Then, the algorithm continues to repeat
-//! until the exemplar values stop changing, or the **maximum iterations** are met.
+//! until the exemplar values stop changing, or until the **maximum iterations** are met.
 //!
 //! # Why this crate?
 //! The nature of Affinity Propagation demands an *O(n<sup>2</sup>)* runtime. An existing [sklearn](https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38)
-//! implementation is implemented using the Python library [numpy](https://numpy.org/doc/stable/index.html),
+//! version is implemented using the Python library [numpy](https://numpy.org/doc/stable/index.html),
 //! which implements vectorized calculations. Coupled with **SIMD** instructions, this results in
 //! decreased user runtime.
 //!
@@ -48,8 +48,9 @@
 //!     let (converged, results) = ap.predict(&x, NegCosine::default());
 //!     assert!(converged && results.len() == 1 && results.contains_key(&0));
 //!
-//! Users who wish to calculate similarity differently are advised that **this implementation of
-//! Affinity Propagation is only guaranteed to converge for negative similarity values**.
+//! Users who wish to calculate similarity differently are advised that Affinity Propagation
+//! expects *s(i,j)* > *s(i, k)* iff x<sub>i</sub> is more similar to x<sub>j</sub> than to
+//! x<sub>k</sub>.
 //!
 //! ## From the Command Line
 //!

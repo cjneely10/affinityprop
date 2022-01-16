@@ -3,8 +3,6 @@ use num_traits::Float;
 
 /// Generate an N x N matrix in which each (i,j) index represents the
 /// similarity between row i and row j of `x`
-///
-/// Debug assertion: Confirm that output from each similarity value is positive.
 pub(crate) fn calculate_similarity<F, S>(x: &Array2<F>, s: S) -> Array2<F>
 where
     F: Float + Send + Sync,
@@ -13,13 +11,10 @@ where
     let x_dim = x.dim();
     let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
     let neg_one = F::from(-1.).unwrap();
-    let zero = F::from(0.).unwrap();
     x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
             // Calculate values for half of matrix, copy over for remaining
             if idx2 > idx1 {
-                let v = s.similarity(&row1, &row2);
-                debug_assert!(v >= zero);
                 out[[idx1, idx2]] = neg_one * s.similarity(&row1, &row2);
             } else {
                 out[[idx1, idx2]] = out[[idx2, idx1]];
@@ -30,13 +25,13 @@ where
 }
 
 /// Determine the similarity between two data entries.
+///
+/// Affinity Propagation expects *s(i,j)* > *s(i, k)* iff x<sub>i</sub> is more similar
+/// to x<sub>j</sub> than to x<sub>k</sub>.
 pub trait Similarity<F>
 where
     F: Float + Send + Sync,
 {
-    /// **Function should return a positive value!** The value will be negated by the caller.
-    ///
-    /// This will be checked when running in debug mode, but not when compiled in release mode.
     fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F;
 }
 

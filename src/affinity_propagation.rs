@@ -24,7 +24,7 @@ use crate::similarity::{calculate_similarity, Similarity};
 ///     assert!(converged && results.len() == 1 && results.contains_key(&1));
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct AffinityPropagation<F> {
-    preference: F,
+    preference: Option<F>,
     damping: F,
     threads: usize,
     convergence_iter: usize,
@@ -44,7 +44,7 @@ where
     /// - max_iterations: 100
     fn default() -> Self {
         Self {
-            preference: F::from(-10.0).unwrap(),
+            preference: Some(F::from(-10.0).unwrap()),
             damping: F::from(0.5).unwrap(),
             threads: 4,
             convergence_iter: 10,
@@ -59,13 +59,13 @@ where
 {
     /// Create new model with provided parameters
     ///
-    /// - preference: non-positive number representing a data point's desire to be its own exemplar
+    /// - preference: Median pairwise similarity if None, or non-positive number
     /// - damping: 0 < damping < 1
     /// - threads: parallel threads for analysis
     /// - convergence_iter: number of iterations to run before checking for convergence
     /// - max_iterations: total allowed iterations
     pub fn new(
-        preference: F,
+        preference: Option<F>,
         damping: F,
         threads: usize,
         convergence_iter: usize,
@@ -75,10 +75,15 @@ where
             damping > F::from(0.).unwrap() && damping < F::from(1.).unwrap(),
             "invalid damping value provided"
         );
-        assert!(
-            F::from(preference).unwrap() <= F::from(0.).unwrap(),
-            "invalid preference provided"
-        );
+        match preference {
+            Some(p) => {
+                assert!(
+                    F::from(p).unwrap() <= F::from(0.).unwrap(),
+                    "invalid preference provided"
+                );
+            }
+            None => {}
+        }
         Self {
             damping,
             threads,
@@ -190,7 +195,7 @@ mod test {
     #[test]
     fn with_parameters() {
         let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
-        let ap = AffinityPropagation::new(-10., 0.9, 2, 10, 100);
+        let ap = AffinityPropagation::new(Some(-10.), 0.9, 2, 10, 100);
         let (converged, results) = ap.predict(&x, NegEuclidean::default());
         assert!(converged);
         assert_eq!(1, results.len());

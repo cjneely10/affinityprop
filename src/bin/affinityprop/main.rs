@@ -56,14 +56,15 @@ fn main() {
             exit(1);
         });
     let precision = matches.value_of("PRECISION").unwrap_or("f32");
-    let preference = matches
-        .value_of("PREF")
-        .unwrap_or("-10.0")
-        .parse::<f32>()
-        .unwrap_or_else(|_| {
+    let preference = matches.value_of("PREF");
+    let preference = match preference {
+        Some(p) => Some(p.parse::<f64>().unwrap_or_else(|_| {
             eprintln!("Unable to parse preference");
             exit(1);
-        });
+        })),
+        None => None,
+    };
+
     let damping = matches
         .value_of("DAMPING")
         .unwrap_or("0.9")
@@ -72,7 +73,7 @@ fn main() {
             eprintln!("Unable to parse damping");
             exit(1);
         });
-    if damping <= 0. || damping >= 1. || preference > 0. {
+    if damping <= 0. || damping >= 1. || preference.unwrap() > 0. {
         eprintln!("Improper parameter set!");
         exit(2);
     }
@@ -86,7 +87,7 @@ fn main() {
         "f64" => {
             let (x, y) = from_file::<f64>(Path::new(&input_file).to_path_buf());
             let ap = AffinityPropagation::new(
-                preference as f64,
+                preference,
                 damping as f64,
                 threads,
                 convergence_iter,
@@ -97,6 +98,7 @@ fn main() {
         }
         _ => {
             let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
+            let preference = Some(preference.unwrap() as f32);
             let ap = AffinityPropagation::new(
                 preference,
                 damping,
