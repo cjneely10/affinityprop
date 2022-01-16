@@ -1,13 +1,21 @@
+[![Rust](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml)
+[![GitHub](https://img.shields.io/github/license/cjneely10/affinityprop)](https://www.gnu.org/licenses/gpl-3.0.html)
+![affinityprop: rustc 1.53+](https://img.shields.io/badge/affinityprop-rustc__1.53-blue)
+
 # AffinityProp
 Vectorized and Parallelized Affinity Propagation
 
 ## About
 
-`affinityprop` provides a command-line accessible interface for running the Affinity Propagation
-clustering algorithm.
+The `affinityprop` crate provides an optimized implementation of the Affinity Propagation
+clustering algorithm, which identifies cluster of data without *a priori* knowledge about the
+number of clusters in the data.
+
+`affinityprop` also provides a command-line accessible interface.
 
 The implementation largely mimics the [sklearn version](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AffinityPropagation.html),
-but has been implemented in Rust using the `rayon` and `ndarray` packages to allow for parallel iteration.
+but has been implemented in Rust using the [rayon](https://crates.io/crates/rayon) 
+and [ndarray](https://crates.io/crates/ndarray) crates to allow for parallel iteration.
 
 ## Installation
 
@@ -17,8 +25,6 @@ Download this repository
 git clone git@github.com:cjneely10/affinityprop.git
 cd affinityprop
 ```
-
-The program binary will be present in the `target/release` directory.
 
 ## Usage
 
@@ -106,7 +112,13 @@ Converged=true/false nClusters=NC nSamples=NS
 ...
 ```
 
-### Notes
+### Runtime and Resource Notes
 
 Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory. 
-This package seeks to address the former, not the latter. 
+This crate seeks to address the former, not the latter.
+
+## Algorithm Notes
+
+The original algorithm was published by [Brendan Frey and Delbert Dueck](https://www.science.org/doi/10.1126/science.1136800).
+
+
