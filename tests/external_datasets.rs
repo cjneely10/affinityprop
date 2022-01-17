@@ -9,7 +9,7 @@ use std::str::FromStr;
 use ndarray::{Array2, ArrayView1, Axis};
 use num_traits::Float;
 
-use affinityprop::{AffinityPropagation, NegEuclidean, Similarity};
+use affinityprop::{AffinityPropagation, NegCosine, NegEuclidean, Similarity};
 
 fn load_data<F>(test_file: PathBuf) -> std::io::Result<(Array2<F>, HashMap<usize, Vec<usize>>)>
 where
@@ -45,16 +45,16 @@ where
 }
 
 #[derive(Default, Clone)]
-struct AbsLogEuclidean;
+struct LogEuclidean;
 
-impl<F> Similarity<F> for AbsLogEuclidean
+impl<F> Similarity<F> for LogEuclidean
 where
     F: Float + Send + Sync,
 {
     fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F {
         let mut row_diff = a - b;
         row_diff.map_inplace(|_a| *_a = (*_a).powi(2).log2());
-        row_diff.sum().abs()
+        row_diff.sum()
     }
 }
 
@@ -87,26 +87,24 @@ fn fifty_exemplars() {
     run_test(&ap, NegEuclidean::default(), file(&"near-exemplar-50.test"));
 }
 
-// #[test]
-// fn iris() {
-//     let ap = AffinityPropagation::<f32>::new(None, 0.95, 4, 400, 4000);
-//     run_test(&ap, NegEuclidean::default(), file(&"iris.test"));
-// }
+/// Iris test predicts 4 labels instead of 3
+#[test]
+#[should_panic]
+fn iris() {
+    let ap = AffinityPropagation::<f32>::new(None, 0.95, 4, 400, 4000);
+    run_test(&ap, LogEuclidean::default(), file(&"iris.test"));
+}
 
 #[test]
 fn breast_cancer() {
     let ap = AffinityPropagation::<f32>::new(Some(-10000.), 0.95, 4, 400, 4000);
-    run_test(&ap, AbsLogEuclidean::default(), file(&"breast_cancer.test"))
+    run_test(&ap, LogEuclidean::default(), file(&"breast_cancer.test"))
 }
 
-// #[test]
-// fn diabetes() {
-//     let ap = AffinityPropagation::<f32>::new(None, 0.5, 4, 400, 4000);
-//     run_test(&ap, NegCosine::default(), file(&"diabetes.test"))
-// }
-
-// #[test]
-// fn digits() {
-//     let ap = AffinityPropagation::<f32>::new(-1000., 0.95, 4, 400, 4000);
-//     run_test(&ap, NegEuclidean::default(), file(&"digits.test"))
-// }
+/// Diabetes test predicts 34 instead of 214
+#[test]
+#[should_panic]
+fn diabetes() {
+    let ap = AffinityPropagation::<f32>::new(None, 0.95, 4, 400, 4000);
+    run_test(&ap, NegCosine::default(), file(&"diabetes.test"))
+}

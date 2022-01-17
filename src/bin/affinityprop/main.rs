@@ -68,7 +68,7 @@ fn main() {
                 exit(2);
             }
             Some(p)
-        },
+        }
         None => None,
     };
 

@@ -25,7 +25,6 @@ def prepared_x_y(fxn):
 test_datasets = {
     "iris": prepared_x_y(datasets.load_iris),
     "diabetes": prepared_x_y(datasets.load_diabetes),
-    "digits": prepared_x_y(datasets.load_digits),
     "breast_cancer": prepared_x_y(datasets.load_breast_cancer)
 }
 

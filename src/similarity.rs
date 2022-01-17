@@ -10,12 +10,11 @@ where
 {
     let x_dim = x.dim();
     let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
-    let neg_one = F::from(-1.).unwrap();
     x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
         x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
             // Calculate values for half of matrix, copy over for remaining
             if idx2 > idx1 {
-                out[[idx1, idx2]] = neg_one * s.similarity(&row1, &row2);
+                out[[idx1, idx2]] = s.similarity(&row1, &row2);
             } else {
                 out[[idx1, idx2]] = out[[idx2, idx1]];
             }
@@ -36,25 +35,57 @@ where
 }
 
 /// Perform similarity calculation as `-1 * sum((row_i - row_j)**2)`
-#[derive(Debug, Default, Clone)]
-pub struct NegEuclidean;
+#[derive(Debug, Clone)]
+pub struct NegEuclidean<F>
+where
+    F: Float + Send + Sync,
+{
+    neg_one: F,
+}
 
-impl<F> Similarity<F> for NegEuclidean
+impl<F> Default for NegEuclidean<F>
+where
+    F: Float + Send + Sync,
+{
+    fn default() -> Self {
+        Self {
+            neg_one: F::from(-1.).unwrap(),
+        }
+    }
+}
+
+impl<F> Similarity<F> for NegEuclidean<F>
 where
     F: Float + Send + Sync,
 {
     fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F {
         let mut row_diff = a - b;
         row_diff.map_inplace(|_a| *_a = (*_a).powi(2));
-        row_diff.sum()
+        self.neg_one * row_diff.sum()
     }
 }
 
 /// Perform similarity calculation as `-1 * (row_i . row_j)/(|row_i|*|row_j|)`
-#[derive(Debug, Default, Clone)]
-pub struct NegCosine;
+#[derive(Debug, Clone)]
+pub struct NegCosine<F>
+where
+    F: Float + Send + Sync,
+{
+    neg_one: F,
+}
 
-impl<F> Similarity<F> for NegCosine
+impl<F> Default for NegCosine<F>
+where
+    F: Float + Send + Sync,
+{
+    fn default() -> Self {
+        Self {
+            neg_one: F::from(-1.).unwrap(),
+        }
+    }
+}
+
+impl<F> Similarity<F> for NegCosine<F>
 where
     F: Float + Send + Sync,
 {
@@ -62,7 +93,7 @@ where
         let dot_product: F = Zip::from(a).and(b).map_collect(|r1, r2| *r1 * *r2).sum();
         let x_magnitude = a.map(|r| r.powi(2)).sum().sqrt();
         let y_magnitude = b.map(|r| r.powi(2)).sum().sqrt();
-        dot_product / x_magnitude / y_magnitude
+        self.neg_one * dot_product / x_magnitude / y_magnitude
     }
 }
 
