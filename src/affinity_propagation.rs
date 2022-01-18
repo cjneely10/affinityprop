@@ -99,7 +99,7 @@ where
     where
         S: Similarity<F>,
     {
-        let s = calculate_similarity(&x, s);
+        let s = calculate_similarity(x, s);
         assert!(s.is_square(), "similarity dim must be NxN");
 
         let pool = rayon::ThreadPoolBuilder::new()
@@ -116,7 +116,7 @@ where
             for _ in self.convergence_iter..self.max_iterations {
                 calculation.update();
                 let sol_map = calculation.generate_exemplars();
-                if sol_map.len() > 0
+                if !sol_map.is_empty()
                     && final_exemplars.len() == sol_map.len()
                     && final_exemplars.iter().all(|k| sol_map.contains(k))
                 {

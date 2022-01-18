@@ -174,6 +174,12 @@ mod tests {
         run_test(&ap, LogEuclidean::default(), file(&"breast_cancer.test"))
     }
 
+    #[test]
+    fn binsanity() {
+        let ap = AffinityPropagation::<f32>::new(Some(-10.), 0.95, 4, 400, 4000);
+        run_test(&ap, NegEuclidean::default(), file(&"binsanity.test"))
+    }
+
     /// Iris test predicts 4 labels instead of 3
     #[test]
     #[should_panic]

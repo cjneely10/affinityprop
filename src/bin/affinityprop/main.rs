@@ -115,14 +115,11 @@ fn main() {
                 convergence_iter,
                 max_iterations,
             );
-            run(&ap, &similarity, &x, &y);
+            run(&ap, &similarity, &x, y);
         }
         _ => {
             let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
-            let preference = match preference {
-                Some(p) => Some(p as f32),
-                None => None,
-            };
+            let preference = preference.map(|p| p as f32);
             let ap = AffinityPropagation::new(
                 preference,
                 damping,
@@ -130,14 +127,14 @@ fn main() {
                 convergence_iter,
                 max_iterations,
             );
-            run(&ap, &similarity, &x, &y);
+            run(&ap, &similarity, &x, y);
         }
     };
 }
 
 /// Run predictor with specified similarity metric
 #[cfg(not(tarpaulin_include))]
-fn run<F>(ap: &AffinityPropagation<F>, similarity: &usize, x: &Array2<F>, y: &Vec<String>)
+fn run<F>(ap: &AffinityPropagation<F>, similarity: &usize, x: &Array2<F>, y: Vec<String>)
 where
     F: Float + Send + Sync,
 {
@@ -147,20 +144,20 @@ where
         1 => {
             // Direct assignment is unstable when destructuring assignments
             // <https://github.com/rust-lang/rust/issues/71126>
-            let a = ap.predict(&x, NegCosine::default());
+            let a = ap.predict(x, NegCosine::default());
             converged = a.0;
             results = a.1;
         }
         2 => {
-            let a = ap.predict(&x, LogEuclidean::default());
+            let a = ap.predict(x, LogEuclidean::default());
             converged = a.0;
             results = a.1;
         }
         _ => {
-            let a = ap.predict(&x, NegEuclidean::default());
+            let a = ap.predict(x, NegEuclidean::default());
             converged = a.0;
             results = a.1;
         }
     }
-    display_results(converged, &results, &y);
+    display_results(converged, &results, y);
 }

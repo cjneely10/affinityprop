@@ -1,13 +1,13 @@
 [![Rust](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml)
 [![GitHub](https://img.shields.io/github/license/cjneely10/affinityprop)](https://www.gnu.org/licenses/gpl-3.0.html)
-[![affinityprop: rustc 1.53+](https://img.shields.io/badge/affinityprop-rustc__1.53+-blue)](https://doc.rust-lang.org/rustc/what-is-rustc.html)
+[![affinityprop: rustc 1.58](https://img.shields.io/badge/affinityprop-rustc__1.58-blue)](https://doc.rust-lang.org/rustc/what-is-rustc.html)
 ![coverage](https://img.shields.io/badge/coverage-93%25-success)
 
 # AffinityProp
 The `affinityprop` crate provides an optimized implementation of the Affinity Propagation
 clustering algorithm, which identifies cluster of data without *a priori* knowledge about the
 number of clusters in the data. The original algorithm was developed by
-[Brendan Frey and Delbery Dueck](http://utstat.toronto.edu/reid/sta414/frey-affinity.pdf).
+<a href="http://utstat.toronto.edu/reid/sta414/frey-affinity.pdf" target="_blank">Brendan Frey and Delbery Dueck</a>
 
 # About
 Affinity Propagation identifies a subset of representative examples from a dataset, known as
@@ -25,15 +25,18 @@ potential exemplars are extracted from the dataset. Then, the algorithm continue
 until the exemplar values stop changing, or until the **maximum iterations** are met.
 
 # Why this crate?
-The nature of Affinity Propagation demands an *O(n<sup>2</sup>)* runtime. An existing [sklearn](https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38)
-version is implemented using the Python library [numpy](https://numpy.org/doc/stable/index.html)
+The nature of Affinity Propagation demands an *O(n<sup>2</sup>)* runtime. An existing
+<a href="https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38" target="_blank">sklearn</a>
+version is implemented using the Python library
+<a href="https://numpy.org/doc/stable/index.html" target="_blank">numpy</a>
 which incorporates vectorized row operations. Coupled with **SIMD** instructions, this results
 in decreased time to finish.
 
 However, in applications with large input values, the *O(n<sup>2</sup>)* runtime is still
-prohibitive. This crate implements Affinity Propagation using the [rayon](https://crates.io/crates/rayon)
-crate, which allows for a drastic decrease in overall runtime - as much as 30-60% depending
-on floating point precision!
+prohibitive. This crate implements Affinity Propagation using the
+<a href="https://crates.io/crates/rayon" target="_blank">rayon</a>
+crate, which allows for a drastic decrease in overall runtime - as much as 30-60% when compiled
+in release mode!
 
 # Installation
 ## In Rust code
