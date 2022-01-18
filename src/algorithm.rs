@@ -15,7 +15,7 @@ impl<F> APAlgorithm<F>
 where
     F: Float + Send + Sync,
 {
-    pub(crate) fn new(damping: F, preference: F, s: Array2<F>) -> Self {
+    pub(crate) fn new(damping: F, preference: Option<F>, s: Array2<F>) -> Self {
         let s_dim = s.dim();
         let mut calculation = Self {
             similarity: s,
@@ -23,6 +23,10 @@ where
             availability: Array2::zeros(s_dim),
             damping,
             neg_inf: F::from(-1.).unwrap() * F::infinity(),
+        };
+        let preference = match preference {
+            Some(pref) => pref,
+            None => Self::median(&calculation.similarity),
         };
         calculation
             .similarity
@@ -85,6 +89,18 @@ where
             .into_iter()
             .for_each(|max_val| exemplar_map.get_mut(&max_val.0).unwrap().push(max_val.1));
         exemplar_map
+    }
+
+    fn median(x: &Array2<F>) -> F {
+        let mut sorted_values = Vec::new();
+        let x_dim_0 = x.dim().0 as usize;
+        for i in 0..x_dim_0 {
+            for j in (i + 1)..x_dim_0 {
+                sorted_values.push(x[[i, j]]);
+            }
+        }
+        sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted_values[sorted_values.len() / 2]
     }
 
     fn generate_idx(&self) -> Array1<F> {
@@ -211,11 +227,11 @@ mod test {
 
     fn test_data() -> Array2<f32> {
         arr2(&[
-            [-0., -7., -6., -12., -17.],
-            [-7., -0., -17., -17., -22.],
-            [-6., -17., -0., -18., -21.],
-            [-12., -17., -18., -0., -3.],
-            [-17., -22., -21., -3., -0.],
+            [0., -7., -6., -12., -17.],
+            [-7., 0., -17., -17., -22.],
+            [-6., -17., 0., -18., -21.],
+            [-12., -17., -18., 0., -3.],
+            [-17., -22., -21., -3., 0.],
         ])
     }
 
@@ -223,7 +239,7 @@ mod test {
     fn valid_select_exemplars() {
         pool(2).scope(move |_| {
             let sim = test_data();
-            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., -22., sim);
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Some(-22.), sim);
             calc.update();
             let exemplars = calc.generate_exemplars();
             let actual: HashSet<usize> = HashSet::from([0]);
@@ -237,7 +253,7 @@ mod test {
     fn valid_gather_members() {
         pool(2).scope(move |_| {
             let sim = test_data();
-            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., -22., sim);
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Some(-22.), sim);
             calc.update();
             let exemplars = calc.generate_exemplar_map(calc.generate_exemplars());
             let actual: HashMap<usize, Vec<usize>> = HashMap::from([(0, vec![0, 1, 2, 3, 4])]);
@@ -256,5 +272,10 @@ mod test {
                     })
             );
         });
+    }
+
+    #[test]
+    fn valid_median() {
+        assert_eq!(-17., APAlgorithm::median(&test_data()));
     }
 }

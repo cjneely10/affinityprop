@@ -4,11 +4,11 @@ use ndarray::Array2;
 use num_traits::Float;
 
 use crate::algorithm::APAlgorithm;
-use crate::similarity::Similarity;
+use crate::similarity::{calculate_similarity, Similarity};
 
 /// A model whose parameters will be used to cluster data into exemplars.
 ///
-/// - preference: A non-positive number representing a data point's desire to be its own exemplar.
+/// - preference: A number representing a data point's desire to be its own exemplar.
 /// - damping: The extent to which the current availability/responsibility is modified in an update.
 /// - threads: The number of workers that will operate on the data.
 /// - convergence_iter: The number of iterations to complete before checking for convergence.
@@ -24,7 +24,7 @@ use crate::similarity::Similarity;
 ///     assert!(converged && results.len() == 1 && results.contains_key(&1));
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct AffinityPropagation<F> {
-    preference: F,
+    preference: Option<F>,
     damping: F,
     threads: usize,
     convergence_iter: usize,
@@ -44,7 +44,7 @@ where
     /// - max_iterations: 100
     fn default() -> Self {
         Self {
-            preference: F::from(-10.0).unwrap(),
+            preference: Some(F::from(-10.0).unwrap()),
             damping: F::from(0.5).unwrap(),
             threads: 4,
             convergence_iter: 10,
@@ -59,13 +59,13 @@ where
 {
     /// Create new model with provided parameters
     ///
-    /// - preference: non-positive number representing a data point's desire to be its own exemplar
+    /// - preference: Median pairwise similarity if None
     /// - damping: 0 < damping < 1
     /// - threads: parallel threads for analysis
     /// - convergence_iter: number of iterations to run before checking for convergence
     /// - max_iterations: total allowed iterations
     pub fn new(
-        preference: F,
+        preference: Option<F>,
         damping: F,
         threads: usize,
         convergence_iter: usize,
@@ -74,10 +74,6 @@ where
         assert!(
             damping > F::from(0.).unwrap() && damping < F::from(1.).unwrap(),
             "invalid damping value provided"
-        );
-        assert!(
-            F::from(preference).unwrap() <= F::from(0.).unwrap(),
-            "invalid preference provided"
         );
         Self {
             damping,
@@ -90,7 +86,7 @@ where
 
     /// Generate cluster predictions for set of `x` values
     /// - x: 2-D array of (rows=samples, cols=attr_values)
-    /// - s: Similarity calculator -> must generate an N x N matrix
+    /// - s: Similarity calculator
     ///
     /// Results will be calculated using the floating-point precision defined
     /// by the input data
@@ -103,7 +99,7 @@ where
     where
         S: Similarity<F>,
     {
-        let s = s.similarity(x);
+        let s = calculate_similarity(&x, s);
         assert!(s.is_square(), "similarity dim must be NxN");
 
         let pool = rayon::ThreadPoolBuilder::new()
@@ -154,6 +150,22 @@ mod test {
     }
 
     #[test]
+    fn zero() {
+        let x: Array2<f32> = arr2(&[[]]);
+        let ap = AffinityPropagation::default();
+        let (converged, _) = ap.predict(&x, NegCosine::default());
+        assert!(!converged);
+    }
+
+    #[test]
+    fn one() {
+        let x: Array2<f32> = arr2(&[[0., 1., 0.]]);
+        let ap = AffinityPropagation::default();
+        let (converged, _) = ap.predict(&x, NegCosine::default());
+        assert!(!converged);
+    }
+
+    #[test]
     fn with_cosine() {
         let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
         let ap = AffinityPropagation::default();
@@ -173,12 +185,12 @@ mod test {
 
     #[test]
     fn with_parameters() {
-        let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
-        let ap = AffinityPropagation::new(-10., 0.9, 2, 10, 100);
-        let (converged, results) = ap.predict(&x, NegEuclidean::default());
+        let x: Array2<f32> = arr2(&[[1., 2., 1.], [2., 3., 2.], [3., 2., 3.]]);
+        let ap = AffinityPropagation::new(None, 0.5, 2, 10, 100);
+        let (converged, results) = ap.predict(&x, NegCosine::default());
         assert!(converged);
-        assert_eq!(1, results.len());
-        assert!(results.contains_key(&1));
+        assert_eq!(2, results.len());
+        assert!(results.contains_key(&0) && results.contains_key(&2));
     }
 
     #[test]

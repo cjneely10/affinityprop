@@ -1,71 +1,93 @@
 [![Rust](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml)
+![coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)
 [![GitHub](https://img.shields.io/github/license/cjneely10/affinityprop)](https://www.gnu.org/licenses/gpl-3.0.html)
 ![affinityprop: rustc 1.53+](https://img.shields.io/badge/affinityprop-rustc__1.53+-blue)
 
 # AffinityProp
-Vectorized and Parallelized Affinity Propagation
-
 The `affinityprop` crate provides an optimized implementation of the Affinity Propagation
 clustering algorithm, which identifies cluster of data without *a priori* knowledge about the
-number of clusters in the data.
+number of clusters in the data. The original algorithm was developed by
+[Brendan Frey and Delbery Dueck](http://utstat.toronto.edu/reid/sta414/frey-affinity.pdf).
 
 # About
 Affinity Propagation identifies a subset of representative examples from a dataset, known as
-**exemplars**. The original algorithm was developed by [Brendan Frey and Delbery Dueck](http://utstat.toronto.edu/reid/sta414/frey-affinity.pdf).
+**exemplars**.
 
 Briefly, the algorithm accepts as input a matrix describing **pairwise similarity** for all data
-values. This information is used to calculate pairwise. **responsibility** and **availability**.
-Responsibility *r(i,j)* describes how well-suited point *j* is to act as an exemplar for
-point *i* when compared to other potential exemplars. Availability *a(i,j)* describes how
-appropriate is the selection of point *j* to be the exemplar for point *i* when compared to
+values. This information is used to calculate pairwise **responsibility** and **availability**.
+Responsibility *`r(i,j)`* describes how well-suited point *`j`* is to act as an exemplar for
+point *`i`* when compared to other potential exemplars. Availability *`a(i,j)`* describes how
+appropriate it is for point *i* to accept point *j* as its exemplar when compared to
 other exemplars.
 
 Users provide a number of **convergence iterations** to repeat the calculations, after which the
 potential exemplars are extracted from the dataset. Then, the algorithm continues to repeat
-until the exemplar values stop changing, or the **maximum iterations** are met.
+until the exemplar values stop changing, or until the **maximum iterations** are met.
 
 # Why this crate?
 The nature of Affinity Propagation demands an *O(n<sup>2</sup>)* runtime. An existing [sklearn](https://github.com/scikit-learn/scikit-learn/blob/0d378913b/sklearn/cluster/_affinity_propagation.py#L38)
-implementation is implemented using the Python library [numpy](https://numpy.org/doc/stable/index.html),
-which implements vectorized calculations. Coupled with **SIMD** instructions, this results in
-decreased user runtime.
+version is implemented using the Python library [numpy](https://numpy.org/doc/stable/index.html)
+which incorporates vectorized row operations. Coupled with **SIMD** instructions, this results
+in decreased time to finish.
 
 However, in applications with large input values, the *O(n<sup>2</sup>)* runtime is still
-prohibitive. This crate implements Affinity Propagation using the Rust [rayon](https://crates.io/crates/rayon)
-library, which allows for a drastic decrease in overall runtime - as much as 30-60% depending
+prohibitive. This crate implements Affinity Propagation using the [rayon](https://crates.io/crates/rayon)
+crate, which allows for a drastic decrease in overall runtime - as much as 30-60% depending
 on floating point precision!
 
-## Installation
-
-Download this repository
-
-```shell
-git clone git@github.com:cjneely10/affinityprop.git
-cd affinityprop
+# Installation
+## In Rust code
+```toml
+[dependencies]
+affinityprop = { git = "https://github.com/cjneely10/affinityprop", version = "0.1.0" }
 ```
 
-## Usage
-
-Run the binary using either Rust's package manager:
-
+## As a command-line tool
 ```shell
-cargo run --release --bin affinityprop -- -h
+cargo install --git https://github.com/cjneely10/affinityprop
 ```
 
-Or, compile using `cargo`:
+# Usage
 
-```shell
-cargo build --release
+## From Rust code
+
+The `affinityprop` crate expects a type that defines how to calculate pairwise `Similarity`
+for all data points. This crate provides the `NegEuclidean`, `NegCosine`, and
+`LogEuclidean` structs, which are defined as `-1 * sum((a - b)**2)`, `-1 * (a . b)/(|a|*|b|)`,
+and `sum(log((a - b)**2))`, respectively.
+
+Users who wish to calculate similarity differently are advised that **Affinity Propagation
+expects *s(i,j)* > *s(i, k)* iff *i* is more similar to *j* than it is to *k***.
+
+```rust
+use ndarray::{arr2, Array2};
+use affinityprop::{AffinityPropagation, NegCosine, NegEuclidean};
+
+let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
+let ap = AffinityPropagation::default();
+
+// Cluster using negative Euclidean similarity
+let (converged, results) = ap.predict(&x, NegEuclidean::default());
+assert!(converged && results.len() == 1 && results.contains_key(&0));
+// Cluster using negative cosine similarity
+let (converged, results) = ap.predict(&x, NegCosine::default());
+assert!(converged && results.len() == 1 && results.contains_key(&0));
 ```
 
-And then run directly:
+## From the Command Line
 
-```shell
-./target/release/affinityprop -h
+`affinityprop` can be run from the command-line and used to analyze a tab-delimited
+file of data:
+
+```text
+ID1  val1  val2
+ID2  val3  val4
+...
 ```
 
-### Help menu
+where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
 
+### Help Menu
 ```text
 affinityprop 0.1.0
 Chris N. <christopher.neely1200@gmail.com>
@@ -80,45 +102,16 @@ FLAGS:
 
 OPTIONS:
     -c, --convergence_iter <CONV_ITER>    Convergence iterations, default=10
-    -d, --damping <DAMPING>               Damping value, default=0.9
+    -d, --damping <DAMPING>               Damping value in range (0, 1), default=0.9
     -i, --input <INPUT>                   Path to input file
     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
     -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
-    -p, --preference <PREF>               Preference, default=-10.0
+    -p, --preference <PREF>               Preference to be own exemplar, default=median pairwise similarity
+    -s, --similarity <SIMILARITY>         Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean), default=0
     -t, --threads <THREADS>               Number of worker threads, default=4
 ```
 
-### Command-line input data
-
-Provide a **tab-separated** file in the format:
-
-```text
-ID1  val1  val2
-ID2  val3  val4
-...
-```
-
-where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
-
-## Example
-
-We have provided an example file in the `data` directory:
-
-```shell
-./target/release/affinityprop -i ./data/Infant_gut_assembly.cov.x100.lognorm -c 400 -m 4000 -p -10.0 -d 0.95 -t 16 > output-file.txt
-```
-
--or-
-
-```shell
-cargo run --release --bin affinityprop -- -i ./data/Infant_gut_assembly.cov.x100.lognorm -c 400 -m 4000 -p -10.0 -d 0.95 -t 16 > output-file.txt
-```
-
 ### Results
-
-Increasing thread count can see up to a 60% runtime reduction for 32-bit floating point precision,
-and around a 20-30% reduction in 64-bit mode (i.e., when run using the `-r f64` flag).
-
 Results are printed to stdout in the format:
 
 ```text
@@ -130,7 +123,8 @@ Converged=true/false nClusters=NC nSamples=NS
 ...
 ```
 
-### Runtime and Resource Notes
+# Runtime and Resource Notes
 
-Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory. 
+Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory.
 This crate seeks to address the former, not the latter.
+
