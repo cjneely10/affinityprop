@@ -97,12 +97,27 @@ where
     }
 }
 
+/// Calculate similarity given `sum(log((a - b)**2))`
+#[derive(Default, Debug, Clone)]
+pub struct LogEuclidean;
+
+impl<F> Similarity<F> for LogEuclidean
+where
+    F: Float + Send + Sync,
+{
+    fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F {
+        let mut row_diff = a - b;
+        row_diff.map_inplace(|_a| *_a = (*_a).powi(2).log2());
+        row_diff.sum()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use ndarray::{arr2, Zip};
 
     use crate::similarity::calculate_similarity;
-    use crate::{NegCosine, NegEuclidean};
+    use crate::{LogEuclidean, NegCosine, NegEuclidean};
 
     #[test]
     fn euclidean_similarity() {
@@ -119,6 +134,16 @@ mod test {
         let x = arr2(&[[3., 2., 0., 5.], [1., 0., 0., 0.]]);
         let s = calculate_similarity(&x, NegCosine::default());
         let actual = arr2(&[[0., -0.4866], [-0.4866, 0.]]);
+        Zip::from(&s)
+            .and(&actual)
+            .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-4));
+    }
+
+    #[test]
+    fn log_euclidean_similarity() {
+        let x = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+        let s = calculate_similarity(&x, LogEuclidean::default());
+        let actual = arr2(&[[0., 0., 6.], [0., 0., 0.], [6., 0., 0.]]);
         Zip::from(&s)
             .and(&actual)
             .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-4));

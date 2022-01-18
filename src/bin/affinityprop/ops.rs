@@ -68,6 +68,7 @@ where
     (out, labels)
 }
 
+#[cfg(not(tarpaulin_include))]
 pub(crate) fn display_results<L>(
     converged: bool,
     results: &HashMap<usize, Vec<usize>>,

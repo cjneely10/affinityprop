@@ -8,7 +8,7 @@ use crate::similarity::{calculate_similarity, Similarity};
 
 /// A model whose parameters will be used to cluster data into exemplars.
 ///
-/// - preference: A non-positive number representing a data point's desire to be its own exemplar.
+/// - preference: A number representing a data point's desire to be its own exemplar.
 /// - damping: The extent to which the current availability/responsibility is modified in an update.
 /// - threads: The number of workers that will operate on the data.
 /// - convergence_iter: The number of iterations to complete before checking for convergence.
@@ -59,7 +59,7 @@ where
 {
     /// Create new model with provided parameters
     ///
-    /// - preference: Median pairwise similarity if None, or non-positive number
+    /// - preference: Median pairwise similarity if None
     /// - damping: 0 < damping < 1
     /// - threads: parallel threads for analysis
     /// - convergence_iter: number of iterations to run before checking for convergence
@@ -75,15 +75,6 @@ where
             damping > F::from(0.).unwrap() && damping < F::from(1.).unwrap(),
             "invalid damping value provided"
         );
-        match preference {
-            Some(p) => {
-                assert!(
-                    F::from(p).unwrap() <= F::from(0.).unwrap(),
-                    "invalid preference provided"
-                );
-            }
-            None => {}
-        }
         Self {
             damping,
             threads,
@@ -95,7 +86,7 @@ where
 
     /// Generate cluster predictions for set of `x` values
     /// - x: 2-D array of (rows=samples, cols=attr_values)
-    /// - s: Similarity calculator -> must generate an N x N matrix
+    /// - s: Similarity calculator
     ///
     /// Results will be calculated using the floating-point precision defined
     /// by the input data
@@ -194,12 +185,12 @@ mod test {
 
     #[test]
     fn with_parameters() {
-        let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
-        let ap = AffinityPropagation::new(Some(-10.), 0.9, 2, 10, 100);
-        let (converged, results) = ap.predict(&x, NegEuclidean::default());
+        let x: Array2<f32> = arr2(&[[1., 2., 1.], [2., 3., 2.], [3., 2., 3.]]);
+        let ap = AffinityPropagation::new(None, 0.5, 2, 10, 100);
+        let (converged, results) = ap.predict(&x, NegCosine::default());
         assert!(converged);
-        assert_eq!(1, results.len());
-        assert!(results.contains_key(&1));
+        assert_eq!(2, results.len());
+        assert!(results.contains_key(&0) && results.contains_key(&2));
     }
 
     #[test]
