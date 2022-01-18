@@ -54,16 +54,20 @@
 //! expects *s(i,j)* > *s(i, k)* iff *i* is more similar to *j* than it is to *k***.
 //!
 //!     # use ndarray::{arr2, Array2};
-//!     # use affinityprop::{AffinityPropagation, NegCosine, NegEuclidean};
+//!     # use affinityprop::{AffinityPropagation, NegCosine};
 //!     let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
 //!     let ap = AffinityPropagation::default();
 //!
-//!     // Cluster using negative Euclidean similarity
-//!     let (converged, results) = ap.predict(&x, NegEuclidean::default());
-//!     assert!(converged && results.len() == 1 && results.contains_key(&0));
 //!     // Cluster using negative cosine similarity
 //!     let (converged, results) = ap.predict(&x, NegCosine::default());
 //!     assert!(converged && results.len() == 1 && results.contains_key(&0));
+//!
+//!     // Use median similarity as preference, damping=0.5, threads=2,
+//!     // convergence_iter=10, max_iterations=100
+//!     let ap = AffinityPropagation::new(None, 0.5, 2, 10, 100);
+//!     let (converged, results) = ap.predict(&x, NegCosine::default());
+//!     assert!(converged && results.len() == 2);
+//!     assert!(results.contains_key(&0) && results.contains_key(&2));
 //!
 //! ## From the Command Line
 //!

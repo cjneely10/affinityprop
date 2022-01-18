@@ -1,7 +1,7 @@
 [![Rust](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml)
-![coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)
 [![GitHub](https://img.shields.io/github/license/cjneely10/affinityprop)](https://www.gnu.org/licenses/gpl-3.0.html)
-![affinityprop: rustc 1.53+](https://img.shields.io/badge/affinityprop-rustc__1.53+-blue)
+[![affinityprop: rustc 1.53+](https://img.shields.io/badge/affinityprop-rustc__1.53+-blue)](https://doc.rust-lang.org/rustc/what-is-rustc.html)
+![coverage](https://img.shields.io/badge/coverage-93%25-success)
 
 # AffinityProp
 The `affinityprop` crate provides an optimized implementation of the Affinity Propagation
@@ -61,17 +61,20 @@ expects *s(i,j)* > *s(i, k)* iff *i* is more similar to *j* than it is to *k***.
 
 ```rust
 use ndarray::{arr2, Array2};
-use affinityprop::{AffinityPropagation, NegCosine, NegEuclidean};
-
+use affinityprop::{AffinityPropagation, NegCosine};
 let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
 let ap = AffinityPropagation::default();
 
-// Cluster using negative Euclidean similarity
-let (converged, results) = ap.predict(&x, NegEuclidean::default());
-assert!(converged && results.len() == 1 && results.contains_key(&0));
 // Cluster using negative cosine similarity
 let (converged, results) = ap.predict(&x, NegCosine::default());
 assert!(converged && results.len() == 1 && results.contains_key(&0));
+
+// Use median similarity as preference, damping=0.5, threads=2,
+// convergence_iter=10, max_iterations=100
+let ap = AffinityPropagation::new(None, 0.5, 2, 10, 100);
+let (converged, results) = ap.predict(&x, NegCosine::default());
+assert!(converged && results.len() == 2);
+assert!(results.contains_key(&0) && results.contains_key(&2));
 ```
 
 ## From the Command Line
