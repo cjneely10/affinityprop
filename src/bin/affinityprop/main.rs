@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate clap;
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::exit;
 
@@ -13,7 +14,6 @@ use crate::ops::{display_results, from_file};
 
 mod ops;
 
-// TODO: Error output formatting
 #[cfg(not(tarpaulin_include))]
 fn main() {
     let matches = clap_app!(affinityprop =>
@@ -21,6 +21,7 @@ fn main() {
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Path to input file")
+        (@arg DELIMIER: -l --delimiter +takes_value "File delimiter, default '\\t'")
         (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Preference to be own exemplar, default=median pairwise similarity")
         (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
@@ -64,7 +65,7 @@ fn main() {
     let precision = matches.value_of("PRECISION").unwrap_or("f32");
     let preference = match matches.value_of("PREF") {
         Some(p) => {
-            let p = p.parse::<f64>().unwrap_or_else(|_| {
+            let p = p.parse::<f32>().unwrap_or_else(|_| {
                 eprintln!("Unable to parse preference");
                 exit(1);
             });
@@ -94,6 +95,7 @@ fn main() {
             eprintln!("Unable to parse damping");
             exit(1);
         });
+    let delimiter = matches.value_of("DELIMITER").unwrap_or("\t");
 
     // Validate values
     if damping <= 0. || damping >= 1. {
@@ -106,61 +108,58 @@ fn main() {
     }
     // Run AP
     match precision {
-        "f64" => {
-            let (x, y) = from_file::<f64>(Path::new(&input_file).to_path_buf());
-            let ap = AffinityPropagation::new(
-                preference,
-                damping as f64,
-                threads,
-                convergence_iter,
-                max_iterations,
-            );
-            run(&ap, &similarity, &x, &y);
-        }
-        _ => {
-            let (x, y) = from_file::<f32>(Path::new(&input_file).to_path_buf());
-            let preference = match preference {
-                Some(p) => Some(p as f32),
-                None => None,
-            };
-            let ap = AffinityPropagation::new(
-                preference,
-                damping,
-                threads,
-                convergence_iter,
-                max_iterations,
-            );
-            run(&ap, &similarity, &x, &y);
-        }
+        "f64" => match from_file::<f64>(Path::new(&input_file).to_path_buf(), delimiter) {
+            Ok((x, y)) => {
+                let ap = AffinityPropagation::new(
+                    preference.map(|p| p as f64),
+                    damping as f64,
+                    threads,
+                    convergence_iter,
+                    max_iterations,
+                );
+                predict(&ap, &similarity, &x, y);
+            }
+            Err(e) => {
+                eprintln!("{}", e.message);
+                exit(3);
+            }
+        },
+        _ => match from_file::<f32>(Path::new(&input_file).to_path_buf(), delimiter) {
+            Ok((x, y)) => {
+                let ap = AffinityPropagation::new(
+                    preference,
+                    damping,
+                    threads,
+                    convergence_iter,
+                    max_iterations,
+                );
+                predict(&ap, &similarity, &x, y);
+            }
+            Err(e) => {
+                eprintln!("{}", e.message);
+                exit(3);
+            }
+        },
     };
 }
 
 /// Run predictor with specified similarity metric
 #[cfg(not(tarpaulin_include))]
-fn run<F>(ap: &AffinityPropagation<F>, similarity: &usize, x: &Array2<F>, y: &Vec<String>)
+fn predict<F>(ap: &AffinityPropagation<F>, similarity: &usize, x: &Array2<F>, y: Vec<String>)
 where
     F: Float + Send + Sync,
 {
-    let converged;
-    let results;
+    let a: (bool, HashMap<usize, Vec<usize>>);
     match similarity {
         1 => {
-            // Direct assignment is unstable when destructuring assignments
-            // <https://github.com/rust-lang/rust/issues/71126>
-            let a = ap.predict(&x, NegCosine::default());
-            converged = a.0;
-            results = a.1;
+            a = ap.predict(x, NegCosine::default());
         }
         2 => {
-            let a = ap.predict(&x, LogEuclidean::default());
-            converged = a.0;
-            results = a.1;
+            a = ap.predict(x, LogEuclidean::default());
         }
         _ => {
-            let a = ap.predict(&x, NegEuclidean::default());
-            converged = a.0;
-            results = a.1;
+            a = ap.predict(x, NegEuclidean::default());
         }
     }
-    display_results(converged, &results, &y);
+    display_results(a.0, &a.1, y);
 }
