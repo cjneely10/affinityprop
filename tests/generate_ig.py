@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
-Generate `binsanity.test` file from BinSanity example data
+Generate `binsanity.test` file from BinSanity example data.
+
+Expects env variable set that points to directory of results from
+running BinSanity example
 
 Tested using Python 3.6.13
 

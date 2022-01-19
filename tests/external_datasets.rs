@@ -75,7 +75,7 @@ mod tests {
                 .iter()
                 .map(|(k, v)| (*k, HashSet::from_iter(v.iter().map(|v| *v)))),
         );
-        // let mut matched_cluster_ids: HashSet<usize> = HashSet::new();
+        let mut matched_cluster_ids: HashSet<usize> = HashSet::new();
         let mut total_score: F = F::from(0.).unwrap();
         let mut size = actual.len();
         if predicted.len() > actual.len() {
@@ -84,20 +84,20 @@ mod tests {
         let size = F::from(size).unwrap();
         for (_, actual_cluster) in actual.iter() {
             // Get best-scoring index
-            // let mut best_exemplar: usize = 0;
+            let mut best_exemplar: usize = 0;
             let mut best_score: F = F::from(0.).unwrap();
-            for (_, predicted_cluster) in predicted.iter() {
-                // if matched_cluster_ids.contains(predicted_exemplar) {
-                //     continue;
-                // }
+            for (predicted_exemplar, predicted_cluster) in predicted.iter() {
+                if matched_cluster_ids.contains(predicted_exemplar) {
+                    continue;
+                }
                 let score = f1(actual_cluster, predicted_cluster);
                 if score > best_score {
                     best_score = score;
-                    // best_exemplar = *predicted_exemplar;
+                    best_exemplar = *predicted_exemplar;
                 }
             }
             // Store best match and update score
-            // matched_cluster_ids.insert(best_exemplar);
+            matched_cluster_ids.insert(best_exemplar);
             total_score = total_score + best_score / size;
         }
         total_score
@@ -120,11 +120,11 @@ mod tests {
             .map(|v| u32::from(!predicted.contains(v)))
             .sum();
 
-        // Precision = TP/(TP + FP)
-        // Recall = TP/(TP + FN)
         let tp = F::from(tp).unwrap();
         let fp = F::from(fp).unwrap();
         let f_n = F::from(f_n).unwrap();
+        // Precision = TP/(TP + FP)
+        // Recall = TP/(TP + FN)
         ((tp / (tp + fp)), (tp / (tp + f_n)))
     }
 
@@ -139,15 +139,17 @@ mod tests {
     /// Run test using dataset in file. Optionally compute F1 score.
     fn run_test<F, S>(ap: &AffinityPropagation<F>, s: S, path: PathBuf)
     where
-        F: Float + Send + Sync + FromStr + Default,
+        F: Float + Send + Sync + FromStr + Default + std::fmt::Display,
         S: Similarity<F>,
         <F as FromStr>::Err: Debug,
     {
-        let (test_array, actual) = load_data::<F>(path).unwrap();
+        let (test_array, actual) = load_data::<F>(path.clone()).unwrap();
         let (converged, test_results) = ap.predict(&test_array, s);
         assert!(converged);
         assert_eq!(actual.len(), test_results.len());
-        assert!(compare_clusters::<F, S>(actual, test_results) >= F::from(0.6).unwrap());
+        let f1 = compare_clusters::<F, S>(actual, test_results);
+        println!("Test(F1={:.2}): {:?}", f1, path);
+        assert!(f1 >= F::from(0.6).unwrap());
     }
 
     /// Helper function to load file from test directory
@@ -174,6 +176,7 @@ mod tests {
         run_test(&ap, LogEuclidean::default(), file(&"breast_cancer.test"))
     }
 
+    /// This test is very long-running. Run in release mode to reduce clock time.
     #[test]
     fn binsanity() {
         let ap = AffinityPropagation::<f32>::new(Some(-10.), 0.95, 4, 400, 4000);

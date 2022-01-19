@@ -66,9 +66,9 @@ expects *s(i,j)* > *s(i, k)* iff *i* is more similar to *j* than it is to *k***.
 use ndarray::{arr2, Array2};
 use affinityprop::{AffinityPropagation, NegCosine};
 let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
-let ap = AffinityPropagation::default();
 
 // Cluster using negative cosine similarity
+let ap = AffinityPropagation::default();
 let (converged, results) = ap.predict(&x, NegCosine::default());
 assert!(converged && results.len() == 1 && results.contains_key(&0));
 
@@ -109,6 +109,7 @@ FLAGS:
 OPTIONS:
     -c, --convergence_iter <CONV_ITER>    Convergence iterations, default=10
     -d, --damping <DAMPING>               Damping value in range (0, 1), default=0.9
+    -l, --delimiter <DELIMIER>            File delimiter, default '\t'
     -i, --input <INPUT>                   Path to input file
     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
     -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
