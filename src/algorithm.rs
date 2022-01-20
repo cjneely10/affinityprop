@@ -9,6 +9,8 @@ pub(crate) struct APAlgorithm<F> {
     availability: Array2<F>,
     damping: F,
     neg_inf: F,
+    zero: F,
+    idx: Array1<F>,
 }
 
 impl<F> APAlgorithm<F>
@@ -17,12 +19,15 @@ where
 {
     pub(crate) fn new(damping: F, preference: Option<F>, s: Array2<F>) -> Self {
         let s_dim = s.dim();
+        let zero = F::from(0.).unwrap();
         let mut calculation = Self {
             similarity: s,
             responsibility: Array2::zeros(s_dim),
             availability: Array2::zeros(s_dim),
             damping,
             neg_inf: F::from(-1.).unwrap() * F::infinity(),
+            zero,
+            idx: Self::generate_idx(zero, s_dim.0),
         };
         let preference = match preference {
             Some(pref) => pref,
@@ -41,14 +46,12 @@ where
     }
 
     pub(crate) fn generate_exemplars(&self) -> HashSet<usize> {
-        let idx = self.generate_idx();
-        let zero = F::from(0.).unwrap();
         let values: Vec<isize> = Vec::from_iter(
             Zip::from(&self.responsibility.diag())
                 .and(&self.availability.diag())
-                .and(&idx)
+                .and(&self.idx)
                 .par_map_collect(|&r, &a, &i: &F| {
-                    if r + a > zero {
+                    if r + a > self.zero {
                         return i.to_isize().unwrap();
                     }
                     -1
@@ -65,8 +68,7 @@ where
         if exemplar_map.is_empty() {
             return exemplar_map;
         }
-        let idx = self.generate_idx();
-        let max_results = Zip::from(&idx)
+        let max_results = Zip::from(&self.idx)
             .and(self.similarity.axis_iter(Axis(1)))
             .par_map_collect(|&i, col| {
                 let i = i.to_usize().unwrap();
@@ -103,12 +105,8 @@ where
         sorted_values[sorted_values.len() / 2]
     }
 
-    fn generate_idx(&self) -> Array1<F> {
-        Array1::range(
-            F::from(0.).unwrap(),
-            F::from(self.similarity.dim().0).unwrap(),
-            F::from(1.).unwrap(),
-        )
+    fn generate_idx(zero: F, x_dim: usize) -> Array1<F> {
+        Array1::range(zero, F::from(x_dim).unwrap(), F::from(1.).unwrap())
     }
 
     fn update_r(&mut self) {

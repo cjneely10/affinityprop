@@ -1,7 +1,7 @@
 [![Rust](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml)
 [![GitHub](https://img.shields.io/github/license/cjneely10/affinityprop)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![affinityprop: rustc 1.58](https://img.shields.io/badge/affinityprop-rustc__1.58-blue)](https://doc.rust-lang.org/rustc/what-is-rustc.html)
-![coverage](https://img.shields.io/badge/coverage-93%25-success)
+![coverage](https://img.shields.io/badge/coverage-94%25-success)
 
 # AffinityProp
 The `affinityprop` crate provides an optimized implementation of the Affinity Propagation
@@ -37,6 +37,10 @@ prohibitive. This crate implements Affinity Propagation using the
 <a href="https://crates.io/crates/rayon" target="_blank">rayon</a>
 crate, which allows for a drastic decrease in overall runtime - as much as 30-60% when compiled
 in release mode!
+
+# Dependencies
+<a href="https://doc.rust-lang.org/cargo/getting-started/installation.html" target="_blank">cargo</a>
+with `rustc >=1.58`
 
 # Installation
 ## In Rust code

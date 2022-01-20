@@ -32,6 +32,10 @@
 //! crate, which allows for a drastic decrease in overall runtime - as much as 30-60% when compiled
 //! in release mode!
 //!
+//! # Dependencies
+//! <a href="https://doc.rust-lang.org/cargo/getting-started/installation.html">cargo</a>
+//! with `rustc >=1.58`
+//!
 //! # Installation
 //! ## In Rust code
 //! ```toml
@@ -127,7 +131,6 @@
 //! Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory.
 //! This crate seeks to address the former, not the latter.
 //!
-
 pub use affinity_propagation::AffinityPropagation;
 pub use similarity::{LogEuclidean, NegCosine, NegEuclidean, Similarity};
 
