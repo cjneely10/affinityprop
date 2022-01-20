@@ -8,6 +8,7 @@ pub(crate) struct APAlgorithm<F> {
     responsibility: Array2<F>,
     availability: Array2<F>,
     damping: F,
+    inv_damping: F,
     neg_inf: F,
     zero: F,
     idx: Array1<F>,
@@ -25,6 +26,7 @@ where
             responsibility: Array2::zeros(s_dim),
             availability: Array2::zeros(s_dim),
             damping,
+            inv_damping: F::from(1.).unwrap() - damping,
             neg_inf: F::from(-1.).unwrap() * F::infinity(),
             zero,
             idx: Self::generate_idx(zero, s_dim.0),
@@ -145,10 +147,9 @@ where
             .and(&max2)
             .par_for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
-        let damping = self.damping;
-        let inv_damping = F::from(1.).unwrap() - damping;
-        tmp.par_map_inplace(|v| *v = *v * inv_damping);
-        self.responsibility.par_map_inplace(|v| *v = *v * damping);
+        tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
+        self.responsibility
+            .par_map_inplace(|v| *v = *v * self.damping);
         Zip::from(&mut self.responsibility)
             .and(&tmp)
             .par_for_each(|r, &t| *r = *r + t);
@@ -185,10 +186,9 @@ where
             .and(&tmp_diag)
             .par_for_each(|t, d| *t = *d);
 
-        let damping = self.damping;
-        let inv_damping = F::from(1.).unwrap() - damping;
-        tmp.par_map_inplace(|v| *v = *v * inv_damping);
-        self.availability.par_map_inplace(|v| *v = *v * damping);
+        tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
+        self.availability
+            .par_map_inplace(|v| *v = *v * self.damping);
         Zip::from(&mut self.availability)
             .and(&tmp)
             .par_for_each(|a, &t| *a = *a - t);
