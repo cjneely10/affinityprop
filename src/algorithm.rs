@@ -77,7 +77,7 @@ where
                     None
                 }),
         );
-        HashSet::from_iter(values.into_iter().filter_map(|v| v))
+        HashSet::from_iter(values.into_iter().flatten())
     }
 
     /// Collect members of each cluster based on their similarity to current exemplars. Exemplar
@@ -102,8 +102,8 @@ where
                 // Collect into (idx, value)
                 let mut col_data: Vec<(usize, &F)> = col.into_iter().enumerate().collect();
                 // Sort by value
-                col_data.sort_by(|&v1, &v2| v2.1.partial_cmp(&v1.1).unwrap());
-                // Return highest value that is present in exemplar map keys
+                col_data.sort_by(|&v1, &v2| v2.1.partial_cmp(v1.1).unwrap());
+                // Return highest idx that is present in exemplar map
                 for v in col_data.iter() {
                     if exemplar_map.contains_key(&v.0) {
                         return (v.0, i);
