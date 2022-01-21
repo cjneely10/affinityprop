@@ -10,15 +10,18 @@ where
 {
     let x_dim = x.dim();
     let mut out = Array2::<F>::zeros((x_dim.0, x_dim.0));
+    // Calculate values for half of matrix
     x.axis_iter(Axis(0)).enumerate().for_each(|(idx1, row1)| {
-        x.axis_iter(Axis(0)).enumerate().for_each(|(idx2, row2)| {
-            // Calculate values for half of matrix, copy over for remaining
-            if idx2 > idx1 {
+        x.axis_iter(Axis(0))
+            .enumerate()
+            .skip(idx1 + 1)
+            .for_each(|(idx2, row2)| {
                 out[[idx1, idx2]] = s.similarity(&row1, &row2);
-            } else {
-                out[[idx1, idx2]] = out[[idx2, idx1]];
-            }
-        });
+            });
+    });
+    // Copy over for remaining
+    (0..x_dim.0).for_each(|idx1| {
+        (idx1 + 1..x_dim.0).for_each(|idx2| out[[idx2, idx1]] = out[[idx1, idx2]]);
     });
     out
 }
@@ -36,10 +39,7 @@ where
 
 /// Perform similarity calculation as `-1 * sum((row_i - row_j)**2)`
 #[derive(Debug, Clone)]
-pub struct NegEuclidean<F>
-where
-    F: Float + Send + Sync,
-{
+pub struct NegEuclidean<F> {
     neg_one: F,
 }
 
@@ -67,10 +67,7 @@ where
 
 /// Perform similarity calculation as `-1 * (row_i . row_j)/(|row_i|*|row_j|)`
 #[derive(Debug, Clone)]
-pub struct NegCosine<F>
-where
-    F: Float + Send + Sync,
-{
+pub struct NegCosine<F> {
     neg_one: F,
 }
 
