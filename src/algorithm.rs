@@ -3,6 +3,13 @@ use std::collections::{HashMap, HashSet};
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use num_traits::Float;
 
+/// House the contents of the algorithm itself inside a droppable object.
+///
+/// Use this struct to do the actual calculations associated with AP,
+/// including holding (large) responsibility and availability arrays.
+///
+/// Also store pre-calculated constants (like 0, neg inf) to remove unneeded
+/// constructions.
 pub(crate) struct APAlgorithm<F> {
     similarity: Array2<F>,
     responsibility: Array2<F>,
@@ -18,6 +25,11 @@ impl<F> APAlgorithm<F>
 where
     F: Float + Send + Sync,
 {
+    /// Create algorithm with initial data
+    ///
+    /// - damping: (0, 1)
+    /// - preference: If None, will calculate median similarity
+    /// - s: Similarity matrix
     pub(crate) fn new(damping: F, preference: Option<F>, s: Array2<F>) -> Self {
         let s_dim = s.dim();
         let zero = F::from(0.).unwrap();
@@ -35,6 +47,7 @@ where
             Some(pref) => pref,
             None => Self::median(&calculation.similarity),
         };
+        // Preference placed along diagonal
         calculation
             .similarity
             .diag_mut()
@@ -42,26 +55,35 @@ where
         calculation
     }
 
+    /// Update predictions
     pub(crate) fn update(&mut self) {
         self.update_r();
         self.update_a();
     }
 
+    /// Collect currently-predicted exemplars
+    ///
+    /// Data point is a valid exemplar if the sum of its self-responsibility and
+    /// self-availability is positive.
     pub(crate) fn generate_exemplars(&self) -> HashSet<usize> {
-        let values: Vec<isize> = Vec::from_iter(
+        let values: Vec<Option<usize>> = Vec::from_iter(
             Zip::from(&self.responsibility.diag())
                 .and(&self.availability.diag())
                 .and(&self.idx)
                 .par_map_collect(|&r, &a, &i: &F| {
                     if r + a > self.zero {
-                        return i.to_isize().unwrap();
+                        return Some(i.to_usize().unwrap());
                     }
-                    -1
+                    None
                 }),
         );
-        HashSet::from_iter(values.into_iter().filter(|v| *v >= 0).map(|c| c as usize))
+        HashSet::from_iter(values.into_iter().filter_map(|v| v))
     }
 
+    /// Collect members of each cluster based on their similarity to current exemplars. Exemplar
+    /// indices are included in their assigned clusters.
+    ///
+    /// If no exemplars are currently available, will return an empty map
     pub(crate) fn generate_exemplar_map(
         &self,
         sol_map: HashSet<usize>,
@@ -78,7 +100,7 @@ where
                     return (i, i);
                 }
                 // Collect into (idx, value)
-                let mut col_data: Vec<(usize, F)> = col.into_iter().copied().enumerate().collect();
+                let mut col_data: Vec<(usize, &F)> = col.into_iter().enumerate().collect();
                 // Sort by value
                 col_data.sort_by(|&v1, &v2| v2.1.partial_cmp(&v1.1).unwrap());
                 // Return highest value that is present in exemplar map keys
@@ -95,6 +117,7 @@ where
         exemplar_map
     }
 
+    /// Computed simply - collect values into vector, sort, and return value at len() / 2
     fn median(x: &Array2<F>) -> F {
         let mut sorted_values = Vec::new();
         let x_dim_0 = x.dim().0 as usize;
@@ -107,11 +130,16 @@ where
         sorted_values[sorted_values.len() / 2]
     }
 
+    /// Pre-generate row/col index to reduce number of copies made
     fn generate_idx(zero: F, x_dim: usize) -> Array1<F> {
         Array1::range(zero, F::from(x_dim).unwrap(), F::from(1.).unwrap())
     }
 
+    /// Update responsibilities, follow implementation in sklearn at
+    ///
+    /// <https://github.com/scikit-learn/scikit-learn/blob/7e1e6d09b/sklearn/cluster/_affinity_propagation.py#L182>
     fn update_r(&mut self) {
+        // np.add(A, S, tmp)
         let mut tmp: Array2<F> = Array2::zeros(self.similarity.dim());
         Zip::from(&mut tmp)
             .and(&self.similarity)
@@ -121,17 +149,22 @@ where
         let combined =
             Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col));
 
+        // I = np.argmax(tmp, axis=1)
         let max_idx: Array1<usize> = combined.iter().map(|c| c.0).collect();
+        // Y = tmp[ind, I]
         let max1: Array1<F> = combined.iter().map(|c| c.1).collect();
 
+        // tmp[ind, I] = -np.inf
         Zip::from(tmp.axis_iter_mut(Axis(1)))
             .and(&max_idx)
             .par_for_each(|mut t, &m| {
                 t[m] = self.neg_inf;
             });
 
+        // Y2 = np.max(tmp, axis=1)
         let max2 = Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
 
+        // np.subtract(S, Y[:, None], tmp)
         let mut tmp: Array2<F> = Zip::from(&self.similarity)
             .and(
                 &max1
@@ -141,21 +174,29 @@ where
             )
             .par_map_collect(|&s, &m| s - m);
 
+        // tmp[ind, I] = S[ind, I] - Y2
         Zip::from(tmp.axis_iter_mut(Axis(0)))
             .and(self.similarity.axis_iter(Axis(0)))
             .and(&max_idx)
             .and(&max2)
             .par_for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
+        // tmp *= 1 - damping
         tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
+        // R *= damping
         self.responsibility
             .par_map_inplace(|v| *v = *v * self.damping);
+        // R += tmp
         Zip::from(&mut self.responsibility)
             .and(&tmp)
             .par_for_each(|r, &t| *r = *r + t);
     }
 
+    /// Update availabilities, follow implementation in sklearn at
+    ///
+    /// <https://github.com/scikit-learn/scikit-learn/blob/7e1e6d09b/sklearn/cluster/_affinity_propagation.py#L198>
     fn update_a(&mut self) {
+        // np.maximum(R, 0, tmp)
         let mut tmp = self.responsibility.clone();
         let zero = F::from(0.).unwrap();
         tmp.par_map_inplace(|v| {
@@ -163,10 +204,12 @@ where
                 *v = zero;
             }
         });
+        // tmp.flat[:: n_samples + 1] = R.flat[:: n_samples + 1]
         Zip::from(tmp.diag_mut())
             .and(self.responsibility.diag())
             .par_for_each(|t, &r| *t = r);
 
+        // tmp -= np.sum(tmp, axis=0)
         let mut tmp = Zip::from(&tmp)
             .and(
                 &tmp.sum_axis(Axis(0))
@@ -176,24 +219,31 @@ where
             )
             .par_map_collect(|&t, &s| t - s);
 
+        // dA = np.diag(tmp).copy()
         let tmp_diag = tmp.diag().to_owned();
+        // tmp.clip(0, np.inf, tmp)
         tmp.par_map_inplace(|v| {
             if *v < zero {
                 *v = zero;
             }
         });
+        // tmp.flat[:: n_samples + 1] = dA
         Zip::from(tmp.diag_mut())
             .and(&tmp_diag)
             .par_for_each(|t, d| *t = *d);
 
+        // tmp *= 1 - damping
         tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
+        // A *= damping
         self.availability
             .par_map_inplace(|v| *v = *v * self.damping);
+        // A -= tmp
         Zip::from(&mut self.availability)
             .and(&tmp)
             .par_for_each(|a, &t| *a = *a - t);
     }
 
+    /// Collect maximum value and its index from view of data
     fn max_argmax(data: ArrayView<F, Dim<[usize; 1]>>) -> (usize, F) {
         let mut max_pos = 0;
         let mut max: F = data[0];
