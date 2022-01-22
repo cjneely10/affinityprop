@@ -55,8 +55,38 @@ where
         calculation
     }
 
+    /// Run prediction algorithm
+    ///
+    /// Repeat responsibility and availability updates for `convergence_iter` rounds, then begin
+    /// identifying exemplars. Once the exemplars start changing, or `max_iterations` is reached,
+    /// collect and return clusters  
+    pub(crate) fn predict(
+        &mut self,
+        convergence_iter: usize,
+        max_iterations: usize,
+    ) -> (bool, HashMap<usize, Vec<usize>>) {
+        let mut has_converged = false;
+        for _ in 0..convergence_iter {
+            self.update();
+        }
+        let mut final_exemplars = self.generate_exemplars();
+        for _ in convergence_iter..max_iterations {
+            self.update();
+            let sol_map = self.generate_exemplars();
+            if !sol_map.is_empty()
+                && final_exemplars.len() == sol_map.len()
+                && final_exemplars.iter().all(|k| sol_map.contains(k))
+            {
+                has_converged = true;
+                break;
+            }
+            final_exemplars = sol_map;
+        }
+        (has_converged, self.generate_exemplar_map(final_exemplars))
+    }
+
     /// Update predictions
-    pub(crate) fn update(&mut self) {
+    fn update(&mut self) {
         self.update_r();
         self.update_a();
     }
@@ -65,7 +95,7 @@ where
     ///
     /// Data point is a valid exemplar if the sum of its self-responsibility and
     /// self-availability is positive.
-    pub(crate) fn generate_exemplars(&self) -> HashSet<usize> {
+    fn generate_exemplars(&self) -> HashSet<usize> {
         let values: Vec<Option<usize>> = Vec::from_iter(
             Zip::from(&self.responsibility.diag())
                 .and(&self.availability.diag())
@@ -84,10 +114,7 @@ where
     /// indices are included in their assigned clusters.
     ///
     /// If no exemplars are currently available, will return an empty map
-    pub(crate) fn generate_exemplar_map(
-        &self,
-        sol_map: HashSet<usize>,
-    ) -> HashMap<usize, Vec<usize>> {
+    fn generate_exemplar_map(&self, sol_map: HashSet<usize>) -> HashMap<usize, Vec<usize>> {
         let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, vec![])));
         if exemplar_map.is_empty() {
             return exemplar_map;
