@@ -107,28 +107,8 @@ where
             .build()
             .unwrap();
         pool.scope(move |_| {
-            let mut has_converged = false;
             let mut calculation = APAlgorithm::new(self.damping, self.preference, s);
-            for _ in 0..self.convergence_iter {
-                calculation.update();
-            }
-            let mut final_exemplars = calculation.generate_exemplars();
-            for _ in self.convergence_iter..self.max_iterations {
-                calculation.update();
-                let sol_map = calculation.generate_exemplars();
-                if !sol_map.is_empty()
-                    && final_exemplars.len() == sol_map.len()
-                    && final_exemplars.iter().all(|k| sol_map.contains(k))
-                {
-                    has_converged = true;
-                    break;
-                }
-                final_exemplars = sol_map;
-            }
-            (
-                has_converged,
-                calculation.generate_exemplar_map(final_exemplars),
-            )
+            calculation.predict(self.convergence_iter, self.max_iterations)
         })
     }
 }
