@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::Preference;
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use num_traits::Float;
 
@@ -30,7 +31,7 @@ where
     /// - damping: (0, 1)
     /// - preference: If None, will calculate median similarity
     /// - s: Similarity matrix
-    pub(crate) fn new(damping: F, preference: Option<F>, s: Array2<F>) -> Self {
+    pub(crate) fn new(damping: F, preference: Preference<F>, s: Array2<F>) -> Self {
         let s_dim = s.dim();
         let zero = F::from(0.).unwrap();
         let mut calculation = Self {
@@ -44,8 +45,18 @@ where
             idx: Self::generate_idx(zero, s_dim.0),
         };
         let preference = match preference {
-            Some(pref) => pref,
-            None => Self::median(&calculation.similarity),
+            Preference::Value(pref) => pref,
+            Preference::Median => Self::median(&calculation.similarity),
+            Preference::List(l) => {
+                assert!(
+                    s_dim.0 == l.len(),
+                    "Preference list length does not match input length!"
+                );
+                Zip::from(l)
+                    .and(calculation.similarity.diag_mut())
+                    .par_for_each(|pref, s_pos| *s_pos = *pref);
+                return calculation;
+            }
         };
         // Preference placed along diagonal
         calculation
@@ -288,10 +299,11 @@ where
 mod test {
     use std::collections::{HashMap, HashSet};
 
-    use ndarray::{arr2, Array2};
+    use ndarray::{arr1, arr2, Array2, Zip};
     use rayon::ThreadPool;
 
     use crate::algorithm::APAlgorithm;
+    use crate::Preference::{List, Value};
 
     fn pool(t: usize) -> ThreadPool {
         rayon::ThreadPoolBuilder::new()
@@ -314,7 +326,7 @@ mod test {
     fn valid_select_exemplars() {
         pool(2).scope(move |_| {
             let sim = test_data();
-            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Some(-22.), sim);
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Value(-22.), sim);
             calc.update();
             let exemplars = calc.generate_exemplars();
             let actual: HashSet<usize> = HashSet::from([0]);
@@ -328,7 +340,7 @@ mod test {
     fn valid_gather_members() {
         pool(2).scope(move |_| {
             let sim = test_data();
-            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Some(-22.), sim);
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Value(-22.), sim);
             calc.update();
             let exemplars = calc.generate_exemplar_map(calc.generate_exemplars());
             let actual: HashMap<usize, Vec<usize>> = HashMap::from([(0, vec![0, 1, 2, 3, 4])]);
@@ -352,5 +364,27 @@ mod test {
     #[test]
     fn valid_median() {
         assert_eq!(-17., APAlgorithm::median(&test_data()));
+    }
+
+    #[test]
+    fn provided_preference_list() {
+        pool(2).scope(move |_| {
+            let sim = test_data();
+            let pref_list = arr1(&[-1., -2., -3., -4., -5.]);
+            let calc: APAlgorithm<f32> = APAlgorithm::new(0., List(&pref_list), sim);
+            Zip::from(calc.similarity.diag())
+                .and(&pref_list)
+                .par_for_each(|c, p| assert_eq!(c, p));
+        });
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_preference_list() {
+        pool(2).scope(move |_| {
+            let sim = test_data();
+            let pref_list = arr1(&[-1., -2., -3.]);
+            let _: APAlgorithm<f32> = APAlgorithm::new(0., List(&pref_list), sim);
+        });
     }
 }
