@@ -12,7 +12,10 @@ mod tests {
     use ndarray::{Array2, Axis};
     use num_traits::Float;
 
-    use affinityprop::{AffinityPropagation, LogEuclidean, NegCosine, NegEuclidean, Similarity};
+    use affinityprop::Preference::Value;
+    use affinityprop::{
+        AffinityPropagation, LogEuclidean, NegCosine, NegEuclidean, Preference, Similarity,
+    };
 
     /// Load test data into Array for evaluation, and gather actual results into result map
     fn load_data<F>(test_file: PathBuf) -> std::io::Result<(Array2<F>, HashMap<usize, Vec<usize>>)>
@@ -137,14 +140,14 @@ mod tests {
     }
 
     /// Run test using dataset in file. Optionally compute F1 score.
-    fn run_test<F, S>(ap: &AffinityPropagation<F>, s: S, path: PathBuf)
+    fn run_test<F, S>(ap: &AffinityPropagation<F>, s: S, path: PathBuf, preference: Preference<F>)
     where
         F: Float + Send + Sync + FromStr + Default + std::fmt::Display,
         S: Similarity<F>,
         <F as FromStr>::Err: Debug,
     {
         let (test_array, actual) = load_data::<F>(path.clone()).unwrap();
-        let (converged, test_results) = ap.predict(&test_array, s);
+        let (converged, test_results) = ap.predict(&test_array, s, preference);
         assert!(converged);
         assert_eq!(actual.len(), test_results.len());
         let f1 = compare_clusters::<F, S>(actual, test_results);
@@ -160,42 +163,72 @@ mod tests {
 
     #[test]
     fn ten_exemplars() {
-        let ap = AffinityPropagation::<f32>::new(Some(-1000.), 0.5, 4, 400, 4000);
-        run_test(&ap, NegEuclidean::default(), file(&"near-exemplar-10.test"));
+        let ap = AffinityPropagation::<f32>::new(0.5, 4, 400, 4000);
+        run_test(
+            &ap,
+            NegEuclidean::default(),
+            file(&"near-exemplar-10.test"),
+            Value(-1000.),
+        );
     }
 
     #[test]
     fn fifty_exemplars() {
-        let ap = AffinityPropagation::<f32>::new(Some(-1000.), 0.5, 4, 400, 4000);
-        run_test(&ap, NegEuclidean::default(), file(&"near-exemplar-50.test"));
+        let ap = AffinityPropagation::<f32>::new(0.5, 4, 400, 4000);
+        run_test(
+            &ap,
+            NegEuclidean::default(),
+            file(&"near-exemplar-50.test"),
+            Value(-1000.),
+        );
     }
 
     #[test]
     fn breast_cancer() {
-        let ap = AffinityPropagation::<f32>::new(Some(-10000.), 0.95, 4, 400, 4000);
-        run_test(&ap, LogEuclidean::default(), file(&"breast_cancer.test"))
+        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
+        run_test(
+            &ap,
+            LogEuclidean::default(),
+            file(&"breast_cancer.test"),
+            Value(-10000.),
+        )
     }
 
     /// This test is very long-running. Run in release mode to reduce clock time.
     #[test]
     fn binsanity() {
-        let ap = AffinityPropagation::<f32>::new(Some(-10.), 0.95, 4, 400, 4000);
-        run_test(&ap, NegEuclidean::default(), file(&"binsanity.test"))
+        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
+        run_test(
+            &ap,
+            NegEuclidean::default(),
+            file(&"binsanity.test"),
+            Value(-10.),
+        )
     }
 
     /// Iris test predicts 4 labels instead of 3
     #[test]
     #[should_panic]
     fn iris() {
-        let ap = AffinityPropagation::<f32>::new(None, 0.95, 4, 400, 4000);
-        run_test(&ap, LogEuclidean::default(), file(&"iris.test"));
+        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
+        run_test(
+            &ap,
+            LogEuclidean::default(),
+            file(&"iris.test"),
+            Preference::Median,
+        );
     }
 
     /// Diabetes test predicts 34 instead of 214
     #[test]
     #[should_panic]
     fn diabetes() {
-        let ap = AffinityPropagation::<f32>::new(None, 0.95, 4, 400, 4000);
-        run_test(&ap, NegCosine::default(), file(&"diabetes.test"))
+        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
+        run_test(
+            &ap,
+            NegCosine::default(),
+            file(&"diabetes.test"),
+            Preference::Median,
+        )
     }
 }

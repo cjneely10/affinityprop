@@ -8,7 +8,7 @@ use std::process::exit;
 use ndarray::Array2;
 use num_traits::Float;
 
-use affinityprop::{AffinityPropagation, LogEuclidean, NegCosine, NegEuclidean};
+use affinityprop::{AffinityPropagation, LogEuclidean, NegCosine, NegEuclidean, Preference};
 
 use crate::ops::{display_results, from_file};
 
@@ -110,14 +110,14 @@ fn main() {
     match precision {
         "f64" => match from_file::<f64>(Path::new(&input_file).to_path_buf(), delimiter) {
             Ok((x, y)) => {
+                let preference = preference.map(|p| p as f64);
                 let ap = AffinityPropagation::new(
-                    preference.map(|p| p as f64),
                     damping as f64,
                     threads,
                     convergence_iter,
                     max_iterations,
                 );
-                predict(&ap, &similarity, &x, y);
+                predict(&ap, &similarity, &x, y, preference);
             }
             Err(e) => {
                 eprintln!("{}", e.message);
@@ -126,14 +126,9 @@ fn main() {
         },
         _ => match from_file::<f32>(Path::new(&input_file).to_path_buf(), delimiter) {
             Ok((x, y)) => {
-                let ap = AffinityPropagation::new(
-                    preference,
-                    damping,
-                    threads,
-                    convergence_iter,
-                    max_iterations,
-                );
-                predict(&ap, &similarity, &x, y);
+                let ap =
+                    AffinityPropagation::new(damping, threads, convergence_iter, max_iterations);
+                predict(&ap, &similarity, &x, y, preference);
             }
             Err(e) => {
                 eprintln!("{}", e.message);
@@ -145,20 +140,29 @@ fn main() {
 
 /// Run predictor with specified similarity metric
 #[cfg(not(tarpaulin_include))]
-fn predict<F>(ap: &AffinityPropagation<F>, similarity: &usize, x: &Array2<F>, y: Vec<String>)
-where
+fn predict<F>(
+    ap: &AffinityPropagation<F>,
+    similarity: &usize,
+    x: &Array2<F>,
+    y: Vec<String>,
+    preference: Option<F>,
+) where
     F: Float + Send + Sync,
 {
+    let preference = match preference {
+        Some(pref) => Preference::Value(pref),
+        None => Preference::Median,
+    };
     let a: (bool, HashMap<usize, Vec<usize>>);
     match similarity {
         1 => {
-            a = ap.predict(x, NegCosine::default());
+            a = ap.predict(x, NegCosine::default(), preference);
         }
         2 => {
-            a = ap.predict(x, LogEuclidean::default());
+            a = ap.predict(x, LogEuclidean::default(), preference);
         }
         _ => {
-            a = ap.predict(x, NegEuclidean::default());
+            a = ap.predict(x, NegEuclidean::default(), preference);
         }
     }
     display_results(a.0, &a.1, y);

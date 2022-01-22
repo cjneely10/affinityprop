@@ -5,6 +5,7 @@ use num_traits::Float;
 
 use crate::algorithm::APAlgorithm;
 use crate::similarity::{calculate_similarity, Similarity};
+use crate::Preference;
 
 /// A model whose parameters will be used to cluster data into exemplars.
 ///
@@ -17,14 +18,13 @@ use crate::similarity::{calculate_similarity, Similarity};
 /// Example:
 ///
 ///     # use ndarray::{arr2, Array2};
-///     # use affinityprop::{AffinityPropagation, NegEuclidean};
+///     # use affinityprop::{AffinityPropagation, NegEuclidean, Preference};
 ///     let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
 ///     let ap = AffinityPropagation::default();
-///     let (converged, results) = ap.predict(&x, NegEuclidean::default());
+///     let (converged, results) = ap.predict(&x, NegEuclidean::default(), Preference::Value(-10.));
 ///     assert!(converged && results.len() == 1 && results.contains_key(&1));
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct AffinityPropagation<F> {
-    preference: Option<F>,
     damping: F,
     threads: usize,
     convergence_iter: usize,
@@ -37,14 +37,12 @@ where
 {
     /// Create new model with default parameters
     ///
-    /// - preference: -10.0
     /// - damping: 0.5
     /// - threads: 4
     /// - convergence_iter: 10
     /// - max_iterations: 100
     fn default() -> Self {
         Self {
-            preference: Some(F::from(-10.0).unwrap()),
             damping: F::from(0.5).unwrap(),
             threads: 4,
             convergence_iter: 10,
@@ -59,18 +57,11 @@ where
 {
     /// Create new model with provided parameters
     ///
-    /// - preference: Median pairwise similarity if None
     /// - damping: 0 < damping < 1
     /// - threads: parallel threads for analysis
     /// - convergence_iter: number of iterations to run before checking for convergence
     /// - max_iterations: total allowed iterations
-    pub fn new(
-        preference: Option<F>,
-        damping: F,
-        threads: usize,
-        convergence_iter: usize,
-        max_iterations: usize,
-    ) -> Self {
+    pub fn new(damping: F, threads: usize, convergence_iter: usize, max_iterations: usize) -> Self {
         assert!(
             damping > F::from(0.).unwrap() && damping < F::from(1.).unwrap(),
             "invalid damping value provided"
@@ -80,13 +71,13 @@ where
             threads,
             max_iterations,
             convergence_iter,
-            preference,
         }
     }
 
     /// Generate cluster predictions for set of `x` values
     /// - x: 2-D array of (rows=samples, cols=attr_values)
     /// - s: Similarity calculator
+    /// - preference: Median value, provided value, or array of preference values
     ///
     /// Results will be calculated using the floating-point precision defined
     /// by the input data
@@ -95,7 +86,12 @@ where
     ///
     /// - True/False if algorithm converged to a set of exemplars
     /// - Map where K:V are exemplar_index:{member_indices}
-    pub fn predict<S>(&self, x: &Array2<F>, s: S) -> (bool, HashMap<usize, Vec<usize>>)
+    pub fn predict<S>(
+        &self,
+        x: &Array2<F>,
+        s: S,
+        p: Preference<F>,
+    ) -> (bool, HashMap<usize, Vec<usize>>)
     where
         S: Similarity<F>,
     {
@@ -107,7 +103,7 @@ where
             .build()
             .unwrap();
         pool.scope(move |_| {
-            let mut calculation = APAlgorithm::new(self.damping, self.preference, s);
+            let mut calculation = APAlgorithm::new(self.damping, p, s);
             calculation.predict(self.convergence_iter, self.max_iterations)
         })
     }
@@ -117,13 +113,14 @@ where
 mod test {
     use ndarray::{arr2, Array2};
 
-    use crate::{AffinityPropagation, NegCosine, NegEuclidean};
+    use crate::Preference::Value;
+    use crate::{AffinityPropagation, NegCosine, NegEuclidean, Preference};
 
     #[test]
     fn simple() {
         let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
         let ap = AffinityPropagation::default();
-        let (converged, results) = ap.predict(&x, NegEuclidean::default());
+        let (converged, results) = ap.predict(&x, NegEuclidean::default(), Preference::Value(-10.));
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&1));
@@ -133,7 +130,7 @@ mod test {
     fn zero() {
         let x: Array2<f32> = arr2(&[[]]);
         let ap = AffinityPropagation::default();
-        let (converged, _) = ap.predict(&x, NegCosine::default());
+        let (converged, _) = ap.predict(&x, NegCosine::default(), Value(-10.));
         assert!(!converged);
     }
 
@@ -141,7 +138,7 @@ mod test {
     fn one() {
         let x: Array2<f32> = arr2(&[[0., 1., 0.]]);
         let ap = AffinityPropagation::default();
-        let (converged, _) = ap.predict(&x, NegCosine::default());
+        let (converged, _) = ap.predict(&x, NegCosine::default(), Value(-10.));
         assert!(!converged);
     }
 
@@ -149,7 +146,7 @@ mod test {
     fn with_cosine() {
         let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
         let ap = AffinityPropagation::default();
-        let (converged, results) = ap.predict(&x, NegCosine::default());
+        let (converged, results) = ap.predict(&x, NegCosine::default(), Value(-10.));
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&0));
@@ -159,15 +156,15 @@ mod test {
     fn with_cosine_unconverged() {
         let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
         let ap = AffinityPropagation::default();
-        let (converged, _) = ap.predict(&x, NegCosine::default());
+        let (converged, _) = ap.predict(&x, NegCosine::default(), Value(-10.));
         assert!(!converged);
     }
 
     #[test]
     fn with_parameters() {
         let x: Array2<f32> = arr2(&[[1., 2., 1.], [2., 3., 2.], [3., 2., 3.]]);
-        let ap = AffinityPropagation::new(None, 0.5, 2, 10, 100);
-        let (converged, results) = ap.predict(&x, NegCosine::default());
+        let ap = AffinityPropagation::new(0.5, 2, 10, 100);
+        let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::Median);
         assert!(converged);
         assert_eq!(2, results.len());
         assert!(results.contains_key(&0) && results.contains_key(&2));
@@ -183,7 +180,7 @@ mod test {
             [1., 1., 3., 2., 3.],
         ]);
         let ap = AffinityPropagation::default();
-        let (converged, results) = ap.predict(&x, NegEuclidean::default());
+        let (converged, results) = ap.predict(&x, NegEuclidean::default(), Value(-10.));
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&0));

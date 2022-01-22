@@ -60,21 +60,28 @@
 //! Users who wish to calculate similarity differently are advised that **Affinity Propagation
 //! expects *s(i,j)* > *s(i, k)* iff *i* is more similar to *j* than it is to *k***.
 //!
-//!     # use ndarray::{arr2, Array2};
-//!     # use affinityprop::{AffinityPropagation, NegCosine};
+//!     use ndarray::{arr1, arr2, Array2};
+//!     use affinityprop::{AffinityPropagation, NegCosine, Preference};
+//!     
 //!     let x: Array2<f32> = arr2(&[[0., 1., 0.], [2., 3., 2.], [3., 2., 3.]]);
 //!
-//!     // Cluster using negative cosine similarity
+//!     // Cluster using negative cosine similarity with a pre-defined preference
 //!     let ap = AffinityPropagation::default();
-//!     let (converged, results) = ap.predict(&x, NegCosine::default());
+//!     let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::Value(-10.));
 //!     assert!(converged && results.len() == 1 && results.contains_key(&0));
 //!
-//!     // Use median similarity as preference, damping=0.5, threads=2,
-//!     // convergence_iter=10, max_iterations=100
-//!     let ap = AffinityPropagation::new(None, 0.5, 2, 10, 100);
-//!     let (converged, results) = ap.predict(&x, NegCosine::default());
-//!     assert!(converged && results.len() == 2);
-//!     assert!(results.contains_key(&0) && results.contains_key(&2));
+//!     // Cluster with list of preference values
+//!     let preferences = arr1(&[0., -1., 0.]);
+//!     let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::List(&preferences));
+//!     assert!(converged);
+//!     assert!(results.len() == 2 && results.contains_key(&0) && results.contains_key(&2));
+//!
+//!     // Use damping=0.5, threads=2, convergence_iter=10, max_iterations=100,
+//!     // median similarity as preference
+//!     let ap = AffinityPropagation::new(0.5, 2, 10, 100);
+//!     let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::Median);
+//!     assert!(converged);
+//!     assert!(results.len() == 2 && results.contains_key(&0) && results.contains_key(&2));
 //!
 //! ## From the Command Line
 //!
@@ -132,8 +139,10 @@
 //! This crate seeks to address the former, not the latter.
 //!
 pub use affinity_propagation::AffinityPropagation;
+pub use preference::Preference;
 pub use similarity::{LogEuclidean, NegCosine, NegEuclidean, Similarity};
 
 mod affinity_propagation;
 mod algorithm;
+mod preference;
 mod similarity;
