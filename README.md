@@ -47,6 +47,7 @@ with `rustc >=1.58`
 ```toml
 [dependencies]
 affinityprop = { git = "https://github.com/cjneely10/affinityprop", version = "0.1.0" }
+ndarray = "0.15.4"
 ```
 
 ## As a command-line tool
