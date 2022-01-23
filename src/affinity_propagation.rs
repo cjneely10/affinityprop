@@ -7,6 +7,15 @@ use crate::algorithm::APAlgorithm;
 use crate::similarity::{calculate_similarity, Similarity};
 use crate::Preference;
 
+/// Index of data point in test data
+pub type Idx = usize;
+/// Cluster of data indices
+pub type Cluster = Vec<Idx>;
+/// Map of exemplar index to cluster
+pub type ClusterMap = HashMap<Idx, Cluster>;
+/// Packaged results, including algorithm convergence status
+pub type ClusterResults = (bool, ClusterMap);
+
 /// A model whose parameters will be used to cluster data into exemplars.
 ///
 /// - preference: A number representing a data point's desire to be its own exemplar.
@@ -77,7 +86,7 @@ where
     /// Generate cluster predictions for set of `x` values
     /// - x: 2-D array of (rows=samples, cols=attr_values)
     /// - s: Similarity calculator
-    /// - preference: Median value, provided value, or array of preference values
+    /// - p: Median value, provided value, or array of preference values
     ///
     /// Results will be calculated using the floating-point precision defined
     /// by the input data
@@ -86,18 +95,32 @@ where
     ///
     /// - True/False if algorithm converged to a set of exemplars
     /// - Map where K:V are exemplar_index:{member_indices}
-    pub fn predict<S>(
-        &self,
-        x: &Array2<F>,
-        s: S,
-        p: Preference<F>,
-    ) -> (bool, HashMap<usize, Vec<usize>>)
+    pub fn predict<S>(&self, x: &Array2<F>, s: S, p: Preference<F>) -> ClusterResults
     where
         S: Similarity<F>,
     {
         let s = calculate_similarity(x, s);
         assert!(s.is_square(), "similarity dim must be NxN");
+        self.predict_parallel(s, p)
+    }
 
+    /// Generate cluster predictions for a pre-calculated similarity matrix
+    /// - x: 2-D square similarity matrix
+    /// - p: Median value, provided value, or array of preference values
+    ///
+    /// Results will be calculated using the floating-point precision defined
+    /// by the input data
+    ///
+    /// Returns:
+    ///
+    /// - True/False if algorithm converged to a set of exemplars
+    /// - Map where K:V are exemplar_index:{member_indices}
+    pub fn predict_precalculated(&self, s: Array2<F>, p: Preference<F>) -> ClusterResults {
+        assert!(s.is_square(), "similarity dim must be NxN");
+        self.predict_parallel(s, p)
+    }
+
+    fn predict_parallel(&self, s: Array2<F>, p: Preference<F>) -> ClusterResults {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(self.threads)
             .build()
@@ -113,8 +136,19 @@ where
 mod test {
     use ndarray::{arr2, Array2};
 
+    use crate::similarity::calculate_similarity;
     use crate::Preference::Value;
     use crate::{AffinityPropagation, NegCosine, NegEuclidean, Preference};
+
+    fn test_data() -> Array2<f32> {
+        arr2(&[
+            [3., 4., 3., 2., 1.],
+            [4., 3., 5., 1., 1.],
+            [3., 5., 3., 3., 3.],
+            [2., 1., 3., 3., 2.],
+            [1., 1., 3., 2., 3.],
+        ])
+    }
 
     #[test]
     fn simple() {
@@ -172,15 +206,20 @@ mod test {
 
     #[test]
     fn larger() {
-        let x: Array2<f32> = arr2(&[
-            [3., 4., 3., 2., 1.],
-            [4., 3., 5., 1., 1.],
-            [3., 5., 3., 3., 3.],
-            [2., 1., 3., 3., 2.],
-            [1., 1., 3., 2., 3.],
-        ]);
+        let x: Array2<f32> = test_data();
         let ap = AffinityPropagation::default();
         let (converged, results) = ap.predict(&x, NegEuclidean::default(), Value(-10.));
+        assert!(converged);
+        assert_eq!(1, results.len());
+        assert!(results.contains_key(&0));
+    }
+
+    #[test]
+    fn test_pre_calculated() {
+        let x: Array2<f32> = test_data();
+        let s = calculate_similarity(&x, NegEuclidean::default());
+        let ap = AffinityPropagation::default();
+        let (converged, results) = ap.predict_precalculated(s, Value(-10.));
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&0));

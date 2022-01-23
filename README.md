@@ -79,8 +79,8 @@ let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::Valu
 assert!(converged && results.len() == 1 && results.contains_key(&0));
 
 // Cluster with list of preference values
-let preferences = arr1(&[0., -1., 0.]);
-let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::List(&preferences));
+let pref = arr1(&[0., -1., 0.]);
+let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::List(&pref));
 assert!(converged);
 assert!(results.len() == 2 && results.contains_key(&0) && results.contains_key(&2));
 
@@ -90,6 +90,12 @@ let ap = AffinityPropagation::new(0.5, 2, 10, 100);
 let (converged, results) = ap.predict(&x, NegCosine::default(), Preference::Median);
 assert!(converged);
 assert!(results.len() == 2 && results.contains_key(&0) && results.contains_key(&2));
+
+// Predict with pre-calculated similarity
+let s: Array2<f32> = arr2(&[[0., -3., -12.], [-3., 0., -3.], [-12., -3., 0.]]);
+let ap = AffinityPropagation::default();
+let (converged, results) = ap.predict_precalculated(s, Preference::Value(-10.));
+assert!(converged && results.len() == 1 && results.contains_key(&1));
 ```
 
 ## From the Command Line
