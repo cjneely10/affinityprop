@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::Preference;
+use crate::{ClusterMap, ClusterResults, Idx, Preference};
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use num_traits::Float;
 
@@ -75,7 +75,7 @@ where
         &mut self,
         convergence_iter: usize,
         max_iterations: usize,
-    ) -> (bool, HashMap<usize, Vec<usize>>) {
+    ) -> ClusterResults {
         let mut has_converged = false;
         for _ in 0..convergence_iter {
             self.update();
@@ -106,8 +106,8 @@ where
     ///
     /// Data point is a valid exemplar if the sum of its self-responsibility and
     /// self-availability is positive.
-    fn generate_exemplars(&self) -> HashSet<usize> {
-        let values: Vec<Option<usize>> = Vec::from_iter(
+    fn generate_exemplars(&self) -> HashSet<Idx> {
+        let values: Vec<Option<Idx>> = Vec::from_iter(
             Zip::from(&self.responsibility.diag())
                 .and(&self.availability.diag())
                 .and(&self.idx)
@@ -125,7 +125,7 @@ where
     /// indices are included in their assigned clusters.
     ///
     /// If no exemplars are currently available, will return an empty map
-    fn generate_exemplar_map(&self, sol_map: HashSet<usize>) -> HashMap<usize, Vec<usize>> {
+    fn generate_exemplar_map(&self, sol_map: HashSet<Idx>) -> ClusterMap {
         let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, vec![])));
         if exemplar_map.is_empty() {
             return exemplar_map;
