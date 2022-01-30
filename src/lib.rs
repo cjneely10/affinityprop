@@ -131,7 +131,7 @@
 //! OPTIONS:
 //!     -c, --convergence_iter <CONV_ITER>    Convergence iterations, default=10
 //!     -d, --damping <DAMPING>               Damping value in range (0, 1), default=0.9
-//!     -l, --delimiter <DELIMIER>            File delimiter, default '\t'
+//!     -l, --delimiter <DELIMITER>            File delimiter, default '\t'
 //!     -i, --input <INPUT>                   Path to input file
 //!     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
 //!     -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
