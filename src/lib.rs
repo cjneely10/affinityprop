@@ -91,7 +91,6 @@
 //!     assert!(converged && results.len() == 1 && results.contains_key(&1));
 //!
 //! ## From the Command Line
-//!
 //! `affinityprop` can be run from the command-line and used to analyze a file of data:
 //!
 //! ```text
@@ -101,22 +100,24 @@
 //! ```
 //!
 //! where ID*n* is any string identifier and val*n* are floating-point (decimal) values. The file
-//! delimiter is provided from the command line.
+//! delimiter is provided from the command line. Similarity will be calculated based on the option
+//! set by the `-s` flag.
 //!
-//! Users may provide a pre-calculated similarity matrix in the same manner:
+//! Users may provide a pre-calculated similarity matrix in a same manner by passing the `-s 3` flag
+//! from the command line, and by structuring their input file as:
 //!
 //! ```text
-//! val1  val2
-//! val3  val4
+//! val1  val2 ...
+//! val3  val4 ...
 //! ...
 //! ```
 //!
-//! where row *i*, col*j* is the pairwise similarity between inputs *i* and *j*. IDs will
+//! where row*i*, col*j* is the pairwise similarity between inputs *i* and *j*. IDs will
 //! automatically be assigned by zero-based index.
 //!
 //! ### Help Menu
 //! ```text
-//! affinityprop 0.1.0
+//! affinityprop 0.1.1
 //! Chris N. <christopher.neely1200@gmail.com>
 //! Vectorized and Parallelized Affinity Propagation
 //!
@@ -130,12 +131,13 @@
 //! OPTIONS:
 //!     -c, --convergence_iter <CONV_ITER>    Convergence iterations, default=10
 //!     -d, --damping <DAMPING>               Damping value in range (0, 1), default=0.9
-//!     -l, --delimiter <DELIMIER>            File delimiter, default '\t'
+//!     -l, --delimiter <DELIMITER>            File delimiter, default '\t'
 //!     -i, --input <INPUT>                   Path to input file
 //!     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
 //!     -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
 //!     -p, --preference <PREF>               Preference to be own exemplar, default=median pairwise similarity
-//!     -s, --similarity <SIMILARITY>         Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean,3=precalculated), default=0
+//!     -s, --similarity <SIMILARITY>         Set similarity calculation method
+//!                                           (0=NegEuclidean,1=NegCosine,2=LogEuclidean,3=precalculated), default=0
 //!     -t, --threads <THREADS>               Number of worker threads, default=4
 //! ```
 //!
