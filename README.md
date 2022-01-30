@@ -39,20 +39,20 @@ crate, which allows for a drastic decrease in overall runtime - as much as 30-60
 in release mode!
 
 # Dependencies
-<a href="https://doc.rust-lang.org/cargo/getting-started/installation.html" target="_blank">cargo</a>
+<a href="https://doc.rust-lang.org/cargo/getting-started/installation.html">cargo</a>
 with `rustc >=1.58`
 
 # Installation
 ## In Rust code
 ```toml
 [dependencies]
-affinityprop = { git = "https://github.com/cjneely10/affinityprop", version = "0.1.0" }
+affinityprop = { git = "https://github.com/cjneely10/affinityprop", version = "0.1.1" }
 ndarray = "0.15.4"
 ```
 
 ## As a command-line tool
 ```shell
-cargo install --git https://github.com/cjneely10/affinityprop
+cargo install affinityprop --git https://github.com/cjneely10/affinityprop --version 0.1.1
 ```
 
 # Usage
@@ -100,8 +100,7 @@ assert!(converged && results.len() == 1 && results.contains_key(&1));
 
 ## From the Command Line
 
-`affinityprop` can be run from the command-line and used to analyze a tab-delimited
-file of data:
+`affinityprop` can be run from the command-line and used to analyze a file of data:
 
 ```text
 ID1  val1  val2
@@ -109,7 +108,18 @@ ID2  val3  val4
 ...
 ```
 
-where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
+where ID*n* is any string identifier and val*n* are floating-point (decimal) values. The file
+delimiter is provided from the command line.
+
+Users may provide a pre-calculated similarity matrix in the same manner:
+
+```text
+val1  val2
+val3  val4
+...
+```
+
+IDs will automatically be assigned by zero-based index.
 
 ### Help Menu
 ```text
@@ -132,7 +142,7 @@ OPTIONS:
     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
     -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
     -p, --preference <PREF>               Preference to be own exemplar, default=median pairwise similarity
-    -s, --similarity <SIMILARITY>         Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean), default=0
+    -s, --similarity <SIMILARITY>         Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean,3=precalculated), default=0
     -t, --threads <THREADS>               Number of worker threads, default=4
 ```
 
@@ -142,9 +152,9 @@ Results are printed to stdout in the format:
 ```text
 Converged=true/false nClusters=NC nSamples=NS
 >Cluster=n size=N exemplar=i
-[comma-separated cluster members]
+[comma-separated cluster member indices]
 >Cluster=n size=N exemplar=i
-[comma-separated cluster members]
+[comma-separated cluster member indices]
 ...
 ```
 
@@ -152,4 +162,3 @@ Converged=true/false nClusters=NC nSamples=NS
 
 Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory.
 This crate seeks to address the former, not the latter.
-

@@ -40,13 +40,13 @@
 //! ## In Rust code
 //! ```toml
 //! [dependencies]
-//! affinityprop = { git = "https://github.com/cjneely10/affinityprop", version = "0.1.0" }
+//! affinityprop = { git = "https://github.com/cjneely10/affinityprop", version = "0.1.1" }
 //! ndarray = "0.15.4"
 //! ```
 //!
 //! ## As a command-line tool
 //! ```shell
-//! cargo install --git https://github.com/cjneely10/affinityprop
+//! cargo install affinityprop --git https://github.com/cjneely10/affinityprop --version 0.1.1
 //! ```
 //!
 //! # Usage
@@ -92,8 +92,7 @@
 //!
 //! ## From the Command Line
 //!
-//! `affinityprop` can be run from the command-line and used to analyze a tab-delimited
-//! file of data:
+//! `affinityprop` can be run from the command-line and used to analyze a file of data:
 //!
 //! ```text
 //! ID1  val1  val2
@@ -101,7 +100,18 @@
 //! ...
 //! ```
 //!
-//! where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
+//! where ID*n* is any string identifier and val*n* are floating-point (decimal) values. The file
+//! delimiter is provided from the command line.
+//!
+//! Users may provide a pre-calculated similarity matrix in the same manner:
+//!
+//! ```text
+//! val1  val2
+//! val3  val4
+//! ...
+//! ```
+//!
+//! IDs will automatically be assigned by zero-based index.
 //!
 //! ### Help Menu
 //! ```text
@@ -124,7 +134,7 @@
 //!     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
 //!     -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
 //!     -p, --preference <PREF>               Preference to be own exemplar, default=median pairwise similarity
-//!     -s, --similarity <SIMILARITY>         Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean), default=0
+//!     -s, --similarity <SIMILARITY>         Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean,3=precalculated), default=0
 //!     -t, --threads <THREADS>               Number of worker threads, default=4
 //! ```
 //!
@@ -134,9 +144,9 @@
 //! ```text
 //! Converged=true/false nClusters=NC nSamples=NS
 //! >Cluster=n size=N exemplar=i
-//! [comma-separated cluster members]
+//! [comma-separated cluster member indices]
 //! >Cluster=n size=N exemplar=i
-//! [comma-separated cluster members]
+//! [comma-separated cluster member indices]
 //! ...
 //! ```
 //!
