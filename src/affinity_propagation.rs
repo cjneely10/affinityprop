@@ -4,6 +4,7 @@ use ndarray::Array2;
 use num_traits::Float;
 
 use crate::algorithm::APAlgorithm;
+use crate::preference::place_preference;
 use crate::similarity::{calculate_similarity, Similarity};
 use crate::Preference;
 
@@ -99,9 +100,10 @@ where
     where
         S: Similarity<F>,
     {
-        let s = calculate_similarity(x, s);
+        let mut s = calculate_similarity(x, s);
         assert!(s.is_square(), "similarity dim must be NxN");
-        self.predict_parallel(s, p)
+        place_preference(&mut s, p);
+        self.predict_parallel(s)
     }
 
     /// Generate cluster predictions for a pre-calculated similarity matrix
@@ -116,17 +118,19 @@ where
     /// - True/False if algorithm converged to a set of exemplars
     /// - Map where K:V are exemplar_index:{member_indices}
     pub fn predict_precalculated(&self, s: Array2<F>, p: Preference<F>) -> ClusterResults {
+        let mut s = s;
         assert!(s.is_square(), "similarity dim must be NxN");
-        self.predict_parallel(s, p)
+        place_preference(&mut s, p);
+        self.predict_parallel(s)
     }
 
-    fn predict_parallel(&self, s: Array2<F>, p: Preference<F>) -> ClusterResults {
+    fn predict_parallel(&self, s: Array2<F>) -> ClusterResults {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(self.threads)
             .build()
             .unwrap();
         pool.scope(move |_| {
-            let mut calculation = APAlgorithm::new(self.damping, p, s);
+            let mut calculation = APAlgorithm::new(self.damping, s);
             calculation.predict(self.convergence_iter, self.max_iterations)
         })
     }

@@ -21,14 +21,14 @@ fn main() {
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Path to input file")
-        (@arg DELIMIER: -l --delimiter +takes_value "File delimiter, default '\\t'")
+        (@arg DELIMITER: -l --delimiter +takes_value "File delimiter, default '\\t'")
         (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Preference to be own exemplar, default=median pairwise similarity")
         (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
         (@arg DAMPING: -d --damping +takes_value "Damping value in range (0, 1), default=0.9")
         (@arg THREADS: -t --threads +takes_value "Number of worker threads, default=4")
         (@arg PRECISION: -r --precision +takes_value "Set f32 or f64 precision, default=f32")
-        (@arg SIMILARITY: -s --similarity +takes_value "Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean), default=0")
+        (@arg SIMILARITY: -s --similarity +takes_value "Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean,3=precalculated), default=0")
     )
     .get_matches();
 
@@ -79,7 +79,7 @@ fn main() {
                 eprintln!("Unable to parse similarity");
                 exit(1);
             });
-            if s > 2 {
+            if s > 3 {
                 eprintln!("Invalid similarity selected");
                 exit(2);
             };
@@ -107,8 +107,13 @@ fn main() {
         exit(2);
     }
     // Run AP
+    let is_precalculated = similarity == 3;
     match precision {
-        "f64" => match from_file::<f64>(Path::new(&input_file).to_path_buf(), delimiter) {
+        "f64" => match from_file::<f64>(
+            Path::new(&input_file).to_path_buf(),
+            delimiter,
+            is_precalculated,
+        ) {
             Ok((x, y)) => {
                 let preference = preference.map(|p| p as f64);
                 let ap = AffinityPropagation::new(
@@ -117,18 +122,22 @@ fn main() {
                     convergence_iter,
                     max_iterations,
                 );
-                predict(&ap, &similarity, &x, y, preference);
+                predict(&ap, &similarity, x, y, preference);
             }
             Err(e) => {
                 eprintln!("{}", e.message);
                 exit(3);
             }
         },
-        _ => match from_file::<f32>(Path::new(&input_file).to_path_buf(), delimiter) {
+        _ => match from_file::<f32>(
+            Path::new(&input_file).to_path_buf(),
+            delimiter,
+            is_precalculated,
+        ) {
             Ok((x, y)) => {
                 let ap =
                     AffinityPropagation::new(damping, threads, convergence_iter, max_iterations);
-                predict(&ap, &similarity, &x, y, preference);
+                predict(&ap, &similarity, x, y, preference);
             }
             Err(e) => {
                 eprintln!("{}", e.message);
@@ -143,7 +152,7 @@ fn main() {
 fn predict<F>(
     ap: &AffinityPropagation<F>,
     similarity: &usize,
-    x: &Array2<F>,
+    x: Array2<F>,
     y: Vec<String>,
     preference: Option<F>,
 ) where
@@ -156,13 +165,16 @@ fn predict<F>(
     let a: (bool, HashMap<usize, Vec<usize>>);
     match similarity {
         1 => {
-            a = ap.predict(x, NegCosine::default(), preference);
+            a = ap.predict(&x, NegCosine::default(), preference);
         }
         2 => {
-            a = ap.predict(x, LogEuclidean::default(), preference);
+            a = ap.predict(&x, LogEuclidean::default(), preference);
+        }
+        3 => {
+            a = ap.predict_precalculated(x, preference);
         }
         _ => {
-            a = ap.predict(x, NegEuclidean::default(), preference);
+            a = ap.predict(&x, NegEuclidean::default(), preference);
         }
     }
     display_results(a.0, &a.1, y);

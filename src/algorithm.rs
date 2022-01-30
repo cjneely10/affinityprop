@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{ClusterMap, ClusterResults, Idx, Preference};
 use ndarray::{Array1, Array2, ArrayView, Axis, Dim, Zip};
 use num_traits::Float;
+
+use crate::{Cluster, ClusterMap, ClusterResults, Idx};
 
 /// House the contents of the algorithm itself inside a droppable object.
 ///
@@ -31,10 +32,10 @@ where
     /// - damping: (0, 1)
     /// - preference: If None, will calculate median similarity
     /// - s: Similarity matrix
-    pub(crate) fn new(damping: F, preference: Preference<F>, s: Array2<F>) -> Self {
+    pub(crate) fn new(damping: F, s: Array2<F>) -> Self {
         let s_dim = s.dim();
         let zero = F::from(0.).unwrap();
-        let mut calculation = Self {
+        Self {
             similarity: s,
             responsibility: Array2::zeros(s_dim),
             availability: Array2::zeros(s_dim),
@@ -43,27 +44,7 @@ where
             neg_inf: F::from(-1.).unwrap() * F::infinity(),
             zero,
             idx: Self::generate_idx(zero, s_dim.0),
-        };
-        let preference = match preference {
-            Preference::Value(pref) => pref,
-            Preference::Median => Self::median(&calculation.similarity),
-            Preference::List(l) => {
-                assert!(
-                    s_dim.0 == l.len(),
-                    "Preference list length does not match input length!"
-                );
-                Zip::from(l)
-                    .and(calculation.similarity.diag_mut())
-                    .par_for_each(|pref, s_pos| *s_pos = *pref);
-                return calculation;
-            }
-        };
-        // Preference placed along diagonal
-        calculation
-            .similarity
-            .diag_mut()
-            .par_map_inplace(|v| *v = preference);
-        calculation
+        }
     }
 
     /// Run prediction algorithm
@@ -126,7 +107,7 @@ where
     ///
     /// If no exemplars are currently available, will return an empty map
     fn generate_exemplar_map(&self, sol_map: HashSet<Idx>) -> ClusterMap {
-        let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, vec![])));
+        let mut exemplar_map = HashMap::from_iter(sol_map.into_iter().map(|x| (x, Cluster::new())));
         if exemplar_map.is_empty() {
             return exemplar_map;
         }
@@ -153,19 +134,6 @@ where
             .into_iter()
             .for_each(|max_val| exemplar_map.get_mut(&max_val.0).unwrap().push(max_val.1));
         exemplar_map
-    }
-
-    /// Computed simply - collect values into vector, sort, and return value at len() / 2
-    fn median(x: &Array2<F>) -> F {
-        let mut sorted_values = Vec::new();
-        let x_dim_0 = x.dim().0 as usize;
-        for i in 0..x_dim_0 {
-            for j in (i + 1)..x_dim_0 {
-                sorted_values.push(x[[i, j]]);
-            }
-        }
-        sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        sorted_values[sorted_values.len() / 2]
     }
 
     /// Pre-generate row/col index to reduce number of copies made
@@ -299,11 +267,12 @@ where
 mod test {
     use std::collections::{HashMap, HashSet};
 
-    use ndarray::{arr1, arr2, Array2, Zip};
+    use ndarray::{arr2, Array2};
     use rayon::ThreadPool;
 
     use crate::algorithm::APAlgorithm;
-    use crate::Preference::{List, Value};
+    use crate::preference::place_preference;
+    use crate::Preference::Value;
 
     fn pool(t: usize) -> ThreadPool {
         rayon::ThreadPoolBuilder::new()
@@ -325,8 +294,9 @@ mod test {
     #[test]
     fn valid_select_exemplars() {
         pool(2).scope(move |_| {
-            let sim = test_data();
-            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Value(-22.), sim);
+            let mut sim = test_data();
+            place_preference(&mut sim, Value(-22.));
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., sim);
             calc.update();
             let exemplars = calc.generate_exemplars();
             let actual: HashSet<usize> = HashSet::from([0]);
@@ -339,8 +309,9 @@ mod test {
     #[test]
     fn valid_gather_members() {
         pool(2).scope(move |_| {
-            let sim = test_data();
-            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., Value(-22.), sim);
+            let mut sim = test_data();
+            place_preference(&mut sim, Value(-22.));
+            let mut calc: APAlgorithm<f32> = APAlgorithm::new(0., sim);
             calc.update();
             let exemplars = calc.generate_exemplar_map(calc.generate_exemplars());
             let actual: HashMap<usize, Vec<usize>> = HashMap::from([(0, vec![0, 1, 2, 3, 4])]);
@@ -358,33 +329,6 @@ mod test {
                         return v.len() == a.len() && v.iter().all(|p| v.contains(p));
                     })
             );
-        });
-    }
-
-    #[test]
-    fn valid_median() {
-        assert_eq!(-17., APAlgorithm::median(&test_data()));
-    }
-
-    #[test]
-    fn provided_preference_list() {
-        pool(2).scope(move |_| {
-            let sim = test_data();
-            let pref_list = arr1(&[-1., -2., -3., -4., -5.]);
-            let calc: APAlgorithm<f32> = APAlgorithm::new(0., List(&pref_list), sim);
-            Zip::from(calc.similarity.diag())
-                .and(&pref_list)
-                .par_for_each(|c, p| assert_eq!(c, p));
-        });
-    }
-
-    #[test]
-    #[should_panic]
-    fn invalid_preference_list() {
-        pool(2).scope(move |_| {
-            let sim = test_data();
-            let pref_list = arr1(&[-1., -2., -3.]);
-            let _: APAlgorithm<f32> = APAlgorithm::new(0., List(&pref_list), sim);
         });
     }
 }
