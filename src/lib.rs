@@ -111,7 +111,8 @@
 //! ...
 //! ```
 //!
-//! IDs will automatically be assigned by zero-based index.
+//! where row *i*, col*j* is the pairwise similarity between inputs *i* and *j*. IDs will
+//! automatically be assigned by zero-based index.
 //!
 //! ### Help Menu
 //! ```text
