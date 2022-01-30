@@ -20,7 +20,11 @@ pub(crate) struct FileParseError {
 /// Provide as many ids and values as desired
 /// All rows should be same length
 /// Values should be floating-point decimal values
-pub(crate) fn from_file<F>(p: PathBuf, d: &str) -> Result<(Array2<F>, Vec<String>), FileParseError>
+pub(crate) fn from_file<F>(
+    p: PathBuf,
+    d: &str,
+    is_precalculated: bool,
+) -> Result<(Array2<F>, Vec<String>), FileParseError>
 where
     F: Float + Default + FromStr,
     <F as FromStr>::Err: Debug,
@@ -28,6 +32,7 @@ where
     let reader = BufReader::new(File::open(p).expect("Unable to open file"));
     let mut labels = Vec::new();
     let mut data = Vec::new();
+    let mut label: usize = 0;
     // Read tab-delimited file
     for (idx, line) in reader.lines().map(|l| l.unwrap()).enumerate() {
         if !line.contains(d) {
@@ -36,16 +41,21 @@ where
             });
         }
         let mut line = line.split(d);
-        // ID as first col
-        let id = match line.next() {
-            Some(l) => l.to_string(),
-            None => {
-                return Err(FileParseError {
-                    message: "Error loading line label".to_string(),
-                })
-            }
-        };
-        labels.push(id);
+        // ID as first col if not precalculated
+        if !is_precalculated {
+            let id = match line.next() {
+                Some(l) => l.to_string(),
+                None => {
+                    return Err(FileParseError {
+                        message: "Error loading line label".to_string(),
+                    })
+                }
+            };
+            labels.push(id);
+        } else {
+            labels.push(label.to_string());
+            label += 1;
+        }
         let mut entry: Vec<F> = vec![];
         for s in line {
             match s.parse::<F>() {
@@ -68,13 +78,20 @@ where
             message: "Data file is empty or only contains a single entry".to_string(),
         });
     }
-    // Validate data all has same length
-    let length = data[0].len();
-    for v in data.iter().skip(1) {
+    let length;
+    let message;
+    if is_precalculated {
+        // Validate data all has same length
+        length = data.len();
+        message = "Precalculated input data must be square!".to_string();
+    } else {
+        // Validate data all has same length
+        length = data[0].len();
+        message = "Input data rows must all be same length!".to_string();
+    }
+    for v in data.iter() {
         if v.len() != length {
-            return Err(FileParseError {
-                message: "Input data rows must all be same length!".to_string(),
-            });
+            return Err(FileParseError { message });
         }
     }
     // Convert data to Array2
@@ -156,7 +173,7 @@ mod test {
         writeln!(file, "id4\t4.0\t2.0\t4.0").unwrap();
         writeln!(file, "id5\t5.0\t1.0\t5.0").unwrap();
         // Read into starting data
-        let (data, labels) = from_file::<f32>(file.path().to_path_buf(), "\t").unwrap();
+        let (data, labels) = from_file::<f32>(file.path().to_path_buf(), "\t", false).unwrap();
         // Validate ids
         for i in 0..5 {
             assert_eq!("id".to_string() + &(i + 1).to_string(), labels[i as usize]);
@@ -176,7 +193,7 @@ mod test {
     #[should_panic]
     fn invalid_load_empty_file() {
         let file = NamedTempFile::new().unwrap();
-        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", false).unwrap();
     }
 
     #[test]
@@ -186,7 +203,7 @@ mod test {
         writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
         writeln!(file, "id2\t2.0\t4.0").unwrap();
         writeln!(file, "id3\t1.0\t5.0\t1.0").unwrap();
-        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", false).unwrap();
     }
 
     #[test]
@@ -196,7 +213,7 @@ mod test {
         writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
         writeln!(file).unwrap();
         writeln!(file, "id3\t1.0\t5.0\t1.0").unwrap();
-        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", false).unwrap();
     }
 
     #[test]
@@ -206,7 +223,7 @@ mod test {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
         writeln!(file, "id2\ta\tb\tc").unwrap();
-        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", false).unwrap();
     }
 
     #[test]
@@ -216,6 +233,31 @@ mod test {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "id1 1.0 5.0 1.0").unwrap();
         writeln!(file, "id2 1.0 2.0 1.0").unwrap();
-        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", false).unwrap();
+    }
+
+    #[test]
+    fn precalculated_file_format() {
+        // Write tempdata
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "0.0 -3.0 -12.0").unwrap();
+        writeln!(file, "-3.0 0.0 -3.0").unwrap();
+        writeln!(file, "-12.0 -3.0 0.0").unwrap();
+        let (_, y) = from_file::<f32>(file.path().to_path_buf(), " ", true).unwrap();
+        let mut expected_id: usize = 0;
+        for id in y {
+            assert_eq!(expected_id.to_string(), id);
+            expected_id += 1;
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_precalculated_file_format() {
+        // Write tempdata
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "0.0 -3.0 -12.0").unwrap();
+        writeln!(file, "-12.0 -3.0 0.0").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), " ", true).unwrap();
     }
 }
