@@ -94,7 +94,7 @@ where
     }
 }
 
-/// Calculate similarity given `sum(log((a - b)**2))`
+/// Perform similarity calculation as `sum(log((a - b)**2))`
 #[derive(Default, Debug, Clone)]
 pub struct LogEuclidean;
 

@@ -28,7 +28,7 @@ fn main() {
         (@arg DAMPING: -d --damping +takes_value "Damping value in range (0, 1), default=0.9")
         (@arg THREADS: -t --threads +takes_value "Number of worker threads, default=4")
         (@arg PRECISION: -r --precision +takes_value "Set f32 or f64 precision, default=f32")
-        (@arg SIMILARITY: -s --similarity +takes_value "Set similarity metric (0=NegEuclidean,1=NegCosine,2=LogEuclidean,3=precalculated), default=0")
+        (@arg SIMILARITY: -s --similarity +takes_value "Set similarity calculation method (0=NegEuclidean,1=NegCosine,2=LogEuclidean,3=precalculated), default=0")
     )
     .get_matches();
 
