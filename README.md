@@ -58,7 +58,6 @@ cargo install affinityprop --git https://github.com/cjneely10/affinityprop --ver
 # Usage
 
 ## From Rust code
-
 The `affinityprop` crate expects a type that defines how to calculate pairwise `Similarity`
 for all data points. This crate provides the `NegEuclidean`, `NegCosine`, and
 `LogEuclidean` structs, which are defined as `-1 * sum((a - b)**2)`, `-1 * (a . b)/(|a|*|b|)`,
@@ -111,8 +110,8 @@ where ID*n* is any string identifier and val*n* are floating-point (decimal) val
 delimiter is provided from the command line. Similarity will be calculated based on the option
 set by the `-s` flag.
 
-Users may provide a pre-calculated similarity matrix in a same manner by passing the `-s 3` flag
-from the command line, and by structuring their input file as:
+Users may provide a pre-calculated similarity matrix in a similar manner by passing the `-s 3`
+flag from the command line and by structuring their input file as:
 
 ```text
 val1  val2 ...
@@ -139,7 +138,7 @@ FLAGS:
 OPTIONS:
     -c, --convergence_iter <CONV_ITER>    Convergence iterations, default=10
     -d, --damping <DAMPING>               Damping value in range (0, 1), default=0.9
-    -l, --delimiter <DELIMITER>            File delimiter, default '\t'
+    -l, --delimiter <DELIMITER>           File delimiter, default '\t'
     -i, --input <INPUT>                   Path to input file
     -m, --max_iter <MAX_ITER>             Maximum iterations, default=100
     -r, --precision <PRECISION>           Set f32 or f64 precision, default=f32
@@ -162,6 +161,5 @@ Converged=true/false nClusters=NC nSamples=NS
 ```
 
 # Runtime and Resource Notes
-
 Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory.
 This crate seeks to address the former, not the latter.
