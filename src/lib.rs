@@ -146,9 +146,9 @@
 //! ```text
 //! Converged=true/false nClusters=NC nSamples=NS
 //! >Cluster=n size=N exemplar=i
-//! [comma-separated cluster member indices]
+//! [comma-separated cluster member IDs/indices]
 //! >Cluster=n size=N exemplar=i
-//! [comma-separated cluster member indices]
+//! [comma-separated cluster member IDs/indices]
 //! ...
 //! ```
 //!
