@@ -17,11 +17,12 @@ mod ops;
 #[cfg(not(tarpaulin_include))]
 fn main() {
     let matches = clap_app!(affinityprop =>
-        (version: "0.1.0")
+        (version: "0.1.1")
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Path to input file")
         (@arg DELIMITER: -l --delimiter +takes_value "File delimiter, default '\\t'")
+        (@arg NO_LABELS: -n --no_labels "Input file does not contain IDS as the first column")
         (@arg PREF: -p --preference +takes_value +allow_hyphen_values "Preference to be own exemplar, default=median pairwise similarity")
         (@arg MAX_ITER: -m --max_iter +takes_value "Maximum iterations, default=100")
         (@arg CONV_ITER: -c --convergence_iter +takes_value "Convergence iterations, default=10")
@@ -108,10 +109,12 @@ fn main() {
     }
     // Run AP
     let is_precalculated = similarity == 3;
+    let collect_labels = !matches.is_present("NO_LABELS");
     match precision {
         "f64" => match from_file::<f64>(
             Path::new(&input_file).to_path_buf(),
             delimiter,
+            collect_labels,
             is_precalculated,
         ) {
             Ok((x, y)) => {
@@ -132,6 +135,7 @@ fn main() {
         _ => match from_file::<f32>(
             Path::new(&input_file).to_path_buf(),
             delimiter,
+            collect_labels,
             is_precalculated,
         ) {
             Ok((x, y)) => {

@@ -93,26 +93,50 @@
 //! `affinityprop` can be run from the command-line and used to analyze a file of data:
 //!
 //! ```text
-//! ID1  val1  val2
-//! ID2  val3  val4
+//! ID1 val1 val2
+//! ID2 val3 val4
+//! ID3 val5 val6
 //! ...
 //! ```
 //!
-//! where ID*n* is any string identifier and val*n* are floating-point (decimal) values. The file
-//! delimiter is provided from the command line. Similarity will be calculated based on the option
-//! set by the `-s` flag.
+//! where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
+//! The file delimiter is provided from the command line with the `-l` flag.
+//! Similarity will be calculated based on the option set by the `-s` flag.
 //!
-//! Users may provide a pre-calculated similarity matrix in a similar manner by passing the `-s 3`
-//! flag from the command line and by structuring their input file as:
+//! For files without row ids:
 //!
 //! ```text
-//! val1  val2 ...
-//! val3  val4 ...
+//! val1 val2
+//! val3 val4
+//! val5 val6
 //! ...
 //! ```
 //!
-//! where row*i*, col*j* is the pairwise similarity between inputs *i* and *j*. IDs will
-//! automatically be assigned by zero-based index.
+//! provide the `-n` flag from the command line. IDs will automatically be assigned by zero-based
+//! index.
+//!
+//! Users may instead provide a pre-calculated similarity matrix by passing the `-s 3` flag from
+//! the command line and by structuring their input file as:
+//!
+//! ```text
+//! ID1 sim11 sim12 sim13
+//! ID2 sim21 sim22 sim23
+//! ID3 sim31 sim32 sim33
+//! ...
+//! ```
+//!
+//! where row*i*, col*j* is the pairwise similarity between inputs *i* and *j*.
+//!
+//! Or, for files without row labels, users may optionally pass `-n -s 3`:
+//!
+//! ```text
+//! sim11 sim12 sim13
+//! sim21 sim22 sim23
+//! sim31 sim32 sim33
+//! ...
+//! ```
+//!
+//! IDs will automatically be assigned by zero-based index.
 //!
 //! ### Help Menu
 //! ```text
@@ -124,8 +148,9 @@
 //!     affinityprop [OPTIONS] --input <INPUT>
 //!
 //! FLAGS:
-//!     -h, --help       Prints help information
-//!     -V, --version    Prints version information
+//!     -n, --no_labels    Input file does not contain IDS as the first column
+//!     -h, --help         Prints help information
+//!     -V, --version      Prints version information
 //!
 //! OPTIONS:
 //!     -c, --convergence_iter <CONV_ITER>    Convergence iterations, default=10
