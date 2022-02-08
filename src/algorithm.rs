@@ -16,6 +16,7 @@ pub(crate) struct APAlgorithm<F> {
     similarity: Array2<F>,
     responsibility: Array2<F>,
     availability: Array2<F>,
+    tmp: Array2<F>,
     damping: F,
     inv_damping: F,
     neg_inf: F,
@@ -39,6 +40,7 @@ where
             similarity: s,
             responsibility: Array2::zeros(s_dim),
             availability: Array2::zeros(s_dim),
+            tmp: Array2::zeros(s_dim),
             damping,
             inv_damping: F::from(1.).unwrap() - damping,
             neg_inf: F::from(-1.).unwrap() * F::infinity(),
@@ -146,14 +148,13 @@ where
     /// <https://github.com/scikit-learn/scikit-learn/blob/7e1e6d09b/sklearn/cluster/_affinity_propagation.py#L182>
     fn update_r(&mut self) {
         // np.add(A, S, tmp)
-        let mut tmp: Array2<F> = Array2::zeros(self.similarity.dim());
-        Zip::from(&mut tmp)
+        Zip::from(&mut self.tmp)
             .and(&self.similarity)
             .and(&self.availability)
             .par_for_each(|t, &s, &a| *t = s + a);
 
         let combined =
-            Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col));
+            Zip::from(self.tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col));
 
         // I = np.argmax(tmp, axis=1)
         let max_idx: Array1<usize> = combined.iter().map(|c| c.0).collect();
@@ -161,40 +162,45 @@ where
         let max1: Array1<F> = combined.iter().map(|c| c.1).collect();
 
         // tmp[ind, I] = -np.inf
-        Zip::from(tmp.axis_iter_mut(Axis(1)))
+        Zip::from(self.tmp.axis_iter_mut(Axis(1)))
             .and(&max_idx)
             .par_for_each(|mut t, &m| {
                 t[m] = self.neg_inf;
             });
 
         // Y2 = np.max(tmp, axis=1)
-        let max2 = Zip::from(tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
+        let max2 =
+            Zip::from(self.tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
 
         // np.subtract(S, Y[:, None], tmp)
-        let mut tmp: Array2<F> = Zip::from(&self.similarity)
+        Zip::from(&mut self.tmp)
             .and(
-                &max1
-                    .insert_axis(Axis(1))
-                    .broadcast(self.similarity.dim())
-                    .unwrap(),
+                &Zip::from(&self.similarity)
+                    .and(
+                        &max1
+                            .insert_axis(Axis(1))
+                            .broadcast(self.similarity.dim())
+                            .unwrap(),
+                    )
+                    .par_map_collect(|&s, &m| s - m),
             )
-            .par_map_collect(|&s, &m| s - m);
+            .par_for_each(|t, s| *t = *s);
 
         // tmp[ind, I] = S[ind, I] - Y2
-        Zip::from(tmp.axis_iter_mut(Axis(0)))
+        Zip::from(self.tmp.axis_iter_mut(Axis(0)))
             .and(self.similarity.axis_iter(Axis(0)))
             .and(&max_idx)
             .and(&max2)
             .par_for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
         // tmp *= 1 - damping
-        tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
+        self.tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
         // R *= damping
         self.responsibility
             .par_map_inplace(|v| *v = *v * self.damping);
         // R += tmp
         Zip::from(&mut self.responsibility)
-            .and(&tmp)
+            .and(&self.tmp)
             .par_for_each(|r, &t| *r = *r + t);
     }
 
@@ -203,24 +209,28 @@ where
     /// <https://github.com/scikit-learn/scikit-learn/blob/7e1e6d09b/sklearn/cluster/_affinity_propagation.py#L198>
     fn update_a(&mut self) {
         // np.maximum(R, 0, tmp)
-        let mut tmp = self.responsibility.clone();
+        Zip::from(&mut self.tmp)
+            .and(&self.responsibility)
+            .par_for_each(|t, r| *t = *r);
         let zero = F::from(0.).unwrap();
-        tmp.par_map_inplace(|v| {
+        self.tmp.par_map_inplace(|v| {
             if *v < zero {
                 *v = zero;
             }
         });
         // tmp.flat[:: n_samples + 1] = R.flat[:: n_samples + 1]
-        Zip::from(tmp.diag_mut())
+        Zip::from(&mut self.tmp.diag_mut())
             .and(self.responsibility.diag())
             .par_for_each(|t, &r| *t = r);
 
         // tmp -= np.sum(tmp, axis=0)
-        let mut tmp = Zip::from(&tmp)
+        let mut tmp = Zip::from(&self.tmp)
             .and(
-                &tmp.sum_axis(Axis(0))
+                &self
+                    .tmp
+                    .sum_axis(Axis(0))
                     .insert_axis(Axis(1))
-                    .broadcast(tmp.dim())
+                    .broadcast(self.tmp.dim())
                     .unwrap(),
             )
             .par_map_collect(|&t, &s| t - s);
