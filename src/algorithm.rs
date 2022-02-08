@@ -22,6 +22,9 @@ pub(crate) struct APAlgorithm<F> {
     neg_inf: F,
     zero: F,
     idx: Array1<F>,
+    a: Array1<usize>,
+    b: Array1<F>,
+    c: Array1<F>,
 }
 
 impl<F> APAlgorithm<F>
@@ -46,6 +49,9 @@ where
             neg_inf: F::from(-1.).unwrap() * F::infinity(),
             zero,
             idx: Self::generate_idx(zero, s_dim.0),
+            a: Array1::zeros(s_dim.0),
+            b: Array1::zeros(s_dim.0),
+            c: Array1::zeros(s_dim.0),
         }
     }
 
@@ -153,36 +159,40 @@ where
             .and(&self.availability)
             .par_for_each(|t, &s, &a| *t = s + a);
 
-        let combined =
-            Zip::from(self.tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col));
-
         // I = np.argmax(tmp, axis=1)
-        let max_idx: Array1<usize> = combined.iter().map(|c| c.0).collect();
         // Y = tmp[ind, I]
-        let max1: Array1<F> = combined.iter().map(|c| c.1).collect();
+        Zip::from(&mut self.a)
+            .and(&mut self.b)
+            .and(self.tmp.axis_iter(Axis(1)))
+            .par_for_each(|a, b, t| {
+                let x = Self::max_argmax(t);
+                *a = x.0;
+                *b = x.1;
+            });
 
         // tmp[ind, I] = -np.inf
         Zip::from(self.tmp.axis_iter_mut(Axis(1)))
-            .and(&max_idx)
+            .and(&self.a)
             .par_for_each(|mut t, &m| {
                 t[m] = self.neg_inf;
             });
 
         // Y2 = np.max(tmp, axis=1)
-        let max2 =
-            Zip::from(self.tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
+        Zip::from(&mut self.c)
+            .and(self.tmp.axis_iter(Axis(1)))
+            .par_for_each(|c, col| *c = Self::max_argmax(col).1);
 
         // np.subtract(S, Y[:, None], tmp)
         Zip::from(self.tmp.axis_iter_mut(Axis(0)))
             .and(self.similarity.axis_iter(Axis(0)))
-            .and(&max1)
+            .and(&self.b)
             .par_for_each(|mut t, s, m| t.iter_mut().zip(s.iter()).for_each(|(t, s)| *t = *s - *m));
 
         // tmp[ind, I] = S[ind, I] - Y2
         Zip::from(self.tmp.axis_iter_mut(Axis(0)))
             .and(self.similarity.axis_iter(Axis(0)))
-            .and(&max_idx)
-            .and(&max2)
+            .and(&self.a)
+            .and(&self.c)
             .par_for_each(|mut t, s, &m_idx, &m2| t[m_idx] = s[m_idx] - m2);
 
         // tmp *= 1 - damping
@@ -215,13 +225,17 @@ where
             .par_for_each(|t, &r| *t = r);
 
         // tmp -= np.sum(tmp, axis=0)
-        let sum = self.tmp.sum_axis(Axis(0));
+        Zip::from(&mut self.b)
+            .and(self.tmp.axis_iter(Axis(1)))
+            .par_for_each(|b, t| *b = t.sum());
         Zip::from(self.tmp.axis_iter_mut(Axis(0)))
-            .and(&sum)
+            .and(&self.b)
             .par_for_each(|mut t, &s| t.par_map_inplace(|t| *t = *t - s));
 
         // dA = np.diag(tmp).copy()
-        let tmp_diag = self.tmp.diag().to_owned();
+        Zip::from(&mut self.c)
+            .and(self.tmp.diag())
+            .par_for_each(|c, t| *c = *t);
         // tmp.clip(0, np.inf, tmp)
         self.tmp.par_map_inplace(|v| {
             if *v < self.zero {
@@ -230,8 +244,8 @@ where
         });
         // tmp.flat[:: n_samples + 1] = dA
         Zip::from(self.tmp.diag_mut())
-            .and(&tmp_diag)
-            .par_for_each(|t, d| *t = *d);
+            .and(&self.c)
+            .par_for_each(|t, c| *t = *c);
 
         // tmp *= 1 - damping
         self.tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
