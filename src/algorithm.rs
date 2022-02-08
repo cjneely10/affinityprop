@@ -173,18 +173,10 @@ where
             Zip::from(self.tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
 
         // np.subtract(S, Y[:, None], tmp)
-        Zip::from(&mut self.tmp)
-            .and(
-                &Zip::from(&self.similarity)
-                    .and(
-                        &max1
-                            .insert_axis(Axis(1))
-                            .broadcast(self.similarity.dim())
-                            .unwrap(),
-                    )
-                    .par_map_collect(|&s, &m| s - m),
-            )
-            .par_for_each(|t, s| *t = *s);
+        Zip::from(self.tmp.axis_iter_mut(Axis(0)))
+            .and(self.similarity.axis_iter(Axis(0)))
+            .and(&max1)
+            .par_for_each(|mut t, s, m| t.iter_mut().zip(s.iter()).for_each(|(t, s)| *t = *s - *m));
 
         // tmp[ind, I] = S[ind, I] - Y2
         Zip::from(self.tmp.axis_iter_mut(Axis(0)))
@@ -212,10 +204,9 @@ where
         Zip::from(&mut self.tmp)
             .and(&self.responsibility)
             .par_for_each(|t, r| *t = *r);
-        let zero = F::from(0.).unwrap();
         self.tmp.par_map_inplace(|v| {
-            if *v < zero {
-                *v = zero;
+            if *v < self.zero {
+                *v = self.zero;
             }
         });
         // tmp.flat[:: n_samples + 1] = R.flat[:: n_samples + 1]
@@ -224,38 +215,32 @@ where
             .par_for_each(|t, &r| *t = r);
 
         // tmp -= np.sum(tmp, axis=0)
-        let mut tmp = Zip::from(&self.tmp)
-            .and(
-                &self
-                    .tmp
-                    .sum_axis(Axis(0))
-                    .insert_axis(Axis(1))
-                    .broadcast(self.tmp.dim())
-                    .unwrap(),
-            )
-            .par_map_collect(|&t, &s| t - s);
+        let sum = self.tmp.sum_axis(Axis(0));
+        Zip::from(self.tmp.axis_iter_mut(Axis(0)))
+            .and(&sum)
+            .par_for_each(|mut t, &s| t.par_map_inplace(|t| *t = *t - s));
 
         // dA = np.diag(tmp).copy()
-        let tmp_diag = tmp.diag().to_owned();
+        let tmp_diag = self.tmp.diag().to_owned();
         // tmp.clip(0, np.inf, tmp)
-        tmp.par_map_inplace(|v| {
-            if *v < zero {
-                *v = zero;
+        self.tmp.par_map_inplace(|v| {
+            if *v < self.zero {
+                *v = self.zero;
             }
         });
         // tmp.flat[:: n_samples + 1] = dA
-        Zip::from(tmp.diag_mut())
+        Zip::from(self.tmp.diag_mut())
             .and(&tmp_diag)
             .par_for_each(|t, d| *t = *d);
 
         // tmp *= 1 - damping
-        tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
+        self.tmp.par_map_inplace(|v| *v = *v * self.inv_damping);
         // A *= damping
         self.availability
             .par_map_inplace(|v| *v = *v * self.damping);
         // A -= tmp
         Zip::from(&mut self.availability)
-            .and(&tmp)
+            .and(&self.tmp)
             .par_for_each(|a, &t| *a = *a - t);
     }
 

@@ -140,8 +140,13 @@ mod tests {
     }
 
     /// Run test using dataset in file. Optionally compute F1 score.
-    fn run_test<F, S>(ap: &AffinityPropagation<F>, s: S, path: PathBuf, preference: Preference<F>)
-    where
+    fn run_test<F, S>(
+        ap: &AffinityPropagation<F>,
+        s: S,
+        path: PathBuf,
+        preference: Preference<F>,
+        expected_f1: F,
+    ) where
         F: Float + Send + Sync + FromStr + Default + std::fmt::Display,
         S: Similarity<F>,
         <F as FromStr>::Err: Debug,
@@ -152,7 +157,7 @@ mod tests {
         assert_eq!(actual.len(), test_results.len());
         let f1 = compare_clusters::<F, S>(actual, test_results);
         println!("Test(F1={:.2}): {:?}", f1, path);
-        assert!(f1 >= F::from(0.6).unwrap());
+        assert!(f1 >= expected_f1);
     }
 
     /// Helper function to load file from test directory
@@ -169,6 +174,7 @@ mod tests {
             NegEuclidean::default(),
             file(&"near-exemplar-10.test"),
             Value(-1000.),
+            0.99,
         );
     }
 
@@ -180,6 +186,7 @@ mod tests {
             NegEuclidean::default(),
             file(&"near-exemplar-50.test"),
             Value(-1000.),
+            0.99,
         );
     }
 
@@ -191,6 +198,7 @@ mod tests {
             LogEuclidean::default(),
             file(&"breast_cancer.test"),
             Value(-10000.),
+            0.60,
         )
     }
 
@@ -203,6 +211,7 @@ mod tests {
             NegEuclidean::default(),
             file(&"binsanity.test"),
             Value(-10.),
+            0.98,
         )
     }
 
@@ -216,6 +225,7 @@ mod tests {
             LogEuclidean::default(),
             file(&"iris.test"),
             Preference::Median,
+            0.60,
         );
     }
 
@@ -229,6 +239,7 @@ mod tests {
             NegCosine::default(),
             file(&"diabetes.test"),
             Preference::Median,
+            0.60,
         )
     }
 }
