@@ -173,18 +173,10 @@ where
             Zip::from(self.tmp.axis_iter(Axis(1))).par_map_collect(|col| Self::max_argmax(col).1);
 
         // np.subtract(S, Y[:, None], tmp)
-        Zip::from(&mut self.tmp)
-            .and(
-                &Zip::from(&self.similarity)
-                    .and(
-                        &max1
-                            .insert_axis(Axis(1))
-                            .broadcast(self.similarity.dim())
-                            .unwrap(),
-                    )
-                    .par_map_collect(|&s, &m| s - m),
-            )
-            .par_for_each(|t, s| *t = *s);
+        Zip::from(self.tmp.axis_iter_mut(Axis(0)))
+            .and(self.similarity.axis_iter(Axis(0)))
+            .and(&max1)
+            .par_for_each(|mut t, s, m| t.iter_mut().zip(s.iter()).for_each(|(t, s)| *t = *s - *m));
 
         // tmp[ind, I] = S[ind, I] - Y2
         Zip::from(self.tmp.axis_iter_mut(Axis(0)))
