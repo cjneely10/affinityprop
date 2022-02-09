@@ -214,4 +214,12 @@ In all analyses, `d=0.95, c=400, m=4000`. `p=-10.0` for the biological data and 
 ![Time to complete analysis, scaled by the sklearn implementation, plotted against the number of cores.](assets/combined-data.png)
 
 
-![Comparison of time to complete estimates between sklearn and affinityprop.](assets/time-data.png)
+Estimating time to complete an analysis is dependent on hardware and the number of convergence iterations.
+
+For `c=400`:
+
+![Comparison of time to complete estimates between sklearn and affinityprop, c=400](assets/time-data.png)
+
+For `c=10`:
+
+![Comparison of time to complete estimates between sklearn and affinityprop, c=10](assets/time-data.c10.png)
