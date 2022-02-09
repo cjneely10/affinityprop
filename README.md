@@ -192,7 +192,7 @@ This crate seeks to address the former, not the latter.
 An estimated memory usage can be calculated given:
 
 ```text
-memory = p * 4 * N^2
+memory(GB) = p * 4 * N^2 / 2^30
 ```
 
 With `p = 4` for 32-bit floating-point precision and `p = 8` for 64-bit.
