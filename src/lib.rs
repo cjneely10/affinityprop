@@ -181,6 +181,15 @@
 //! Affinity Propagation is *O(n<sup>2</sup>)* in both runtime and memory.
 //! This crate seeks to address the former, not the latter.
 //!
+//!
+//! An estimated memory usage can be calculated given:
+//!
+//! ```text
+//! memory = p * 4 * N^2
+//! ```
+//!
+//! With `p = 4` for 32-bit floating-point precision and `p = 8` for 64-bit.
+//!
 pub use affinity_propagation::{AffinityPropagation, Cluster, ClusterMap, ClusterResults, Idx};
 pub use preference::Preference;
 pub use similarity::{LogEuclidean, NegCosine, NegEuclidean, Similarity};
