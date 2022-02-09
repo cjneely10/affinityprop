@@ -3,7 +3,7 @@
 [![affinityprop: rustc 1.58](https://img.shields.io/badge/affinityprop-rustc__1.58-blue)](https://doc.rust-lang.org/rustc/what-is-rustc.html)
 ![coverage](https://img.shields.io/badge/coverage-95%25-success)
 
-# AffinityProp
+# affinityprop
 The `affinityprop` crate provides an optimized implementation of the Affinity Propagation
 clustering algorithm, which identifies cluster of data without *a priori* knowledge about the
 number of clusters in the data. The original algorithm was developed by
@@ -207,7 +207,9 @@ was obtained for the biological dataset.
 
 This `affinityprop` implementation was compared against the [Affinity Propagation](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AffinityPropagation.html#sklearn.cluster.AffinityPropagation.fit_predict) 
 implementation contained within scikit-learn-1.0.2, and run using numpy-1.22.2 with Python 3.10.0. 
-This analysis was completed using a Ryzen 9 3950X processor.
+This analysis was completed using a Ryzen 9 3950X processor. 
+
+In all analyses, `d=0.95, c=400, m=4000`. `p=-10.0` for the biological data and `p=-1000.0` for other data.
 
 ![Time to complete analysis, scaled by the sklearn implementation, plotted against the number of cores.](assets/combined-data.png)
 
