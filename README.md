@@ -209,17 +209,7 @@ This `affinityprop` implementation was compared against the [Affinity Propagatio
 implementation contained within scikit-learn-1.0.2, and run using numpy-1.22.2 with Python 3.10.0. 
 This analysis was completed using a Ryzen 9 3950X processor. 
 
-In all analyses, `d=0.95, c=400, m=4000`. `p=-10.0` for the biological data and `p=-1000.0` for other data.
+In all analyses, damping=0.95, convergence_iter=400, and max_iter=4000. 
+Preference=-1000.0 for Gaussian data and -10.0 for biological data.
 
 ![Time to complete analysis, scaled by the sklearn implementation, plotted against the number of cores.](assets/combined-data.png)
-
-
-Estimating time to complete an analysis is dependent on hardware and the number of convergence iterations.
-
-For `c=400`:
-
-![Comparison of time to complete estimates between sklearn and affinityprop, c=400](assets/time-data.png)
-
-For `c=10`:
-
-![Comparison of time to complete estimates between sklearn and affinityprop, c=10](assets/time-data.c10.png)
