@@ -184,7 +184,7 @@
 //! memory(GB) = p * 4 * N^2 / 2^30
 //! ```
 //!
-//! With `p = 4` for 32-bit floating-point precision and `p = 8` for 64-bit.
+//! For `N` inputs. `p = 4` for 32-bit floating-point precision and `p = 8` for 64-bit.
 //!
 pub use affinity_propagation::{AffinityPropagation, Cluster, ClusterMap, ClusterResults, Idx};
 pub use preference::Preference;
