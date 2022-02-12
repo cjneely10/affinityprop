@@ -215,6 +215,19 @@ mod tests {
         )
     }
 
+    /// This test is very long-running. Run in release mode to reduce clock time.
+    #[test]
+    fn binsanity2() {
+        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
+        run_test(
+            &ap,
+            NegEuclidean::default(),
+            file(&"binsanity.2.test"),
+            Value(-10.),
+            0.98,
+        )
+    }
+
     /// Iris test predicts 4 labels instead of 3
     #[test]
     #[should_panic]

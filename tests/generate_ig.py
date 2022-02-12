@@ -17,9 +17,13 @@ from pathlib import Path
 # Directory of results from BinSanity example
 from typing import Dict
 
-FASTA_RESULTS_DIR = os.environ.get("BINSANITY_RESULTS_DIR")
-if FASTA_RESULTS_DIR is None:
-    exit("BINSANITY_RESULTS_DIR is not set")
+FASTA_RESULTS_DIR_A = os.environ.get("BINSANITY_RESULTS_DIR_A")
+if FASTA_RESULTS_DIR_A is None:
+    exit("BINSANITY_RESULTS_DIR_A is not set")
+
+FASTA_RESULTS_DIR_B = os.environ.get("BINSANITY_RESULTS_DIR_B")
+if FASTA_RESULTS_DIR_B is None:
+    exit("BINSANITY_RESULTS_DIR_B is not set")
 
 # Write directory
 DATA_DIR = "test-data"
@@ -47,9 +51,18 @@ if __name__ == "__main__":
     with open(f"{DATA_DIR}/binsanity.test", "w") as out_ptr:
         cluster_id = 0
         point_data = get_data_from_ig_file(Path(DATA_DIR).joinpath("Infant_gut_assembly.cov.x100.lognorm"))
-        for file in os.listdir(FASTA_RESULTS_DIR):
+        for file in os.listdir(FASTA_RESULTS_DIR_A):
             if file.endswith(".fna"):
-                file = Path(os.path.join(FASTA_RESULTS_DIR, file)).resolve()
+                file = Path(os.path.join(FASTA_RESULTS_DIR_A, file)).resolve()
+                for _id in get_ids_from_fasta(file):
+                    out_ptr.write(f"{cluster_id} {point_data[_id]}")
+                cluster_id += 1
+    with open(f"{DATA_DIR}/binsanity.2.test", "w") as out_ptr:
+        cluster_id = 0
+        point_data = get_data_from_ig_file(Path(DATA_DIR).joinpath("assembly.log.cov.x100.lognorm"))
+        for file in os.listdir(FASTA_RESULTS_DIR_B):
+            if file.endswith(".fna"):
+                file = Path(os.path.join(FASTA_RESULTS_DIR_B, file)).resolve()
                 for _id in get_ids_from_fasta(file):
                     out_ptr.write(f"{cluster_id} {point_data[_id]}")
                 cluster_id += 1
