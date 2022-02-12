@@ -46,13 +46,13 @@ with `rustc >=1.58`
 ## In Rust code
 ```toml
 [dependencies]
-affinityprop = { version = "0.1.1" }
+affinityprop = "0.1.1"
 ndarray = "0.15.4"
 ```
 
 ## As a command-line tool
 ```shell
-cargo install affinityprop --version 0.1.1
+cargo install affinityprop
 ```
 
 # Usage
