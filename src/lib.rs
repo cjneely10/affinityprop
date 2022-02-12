@@ -40,13 +40,13 @@
 //! ## In Rust code
 //! ```toml
 //! [dependencies]
-//! affinityprop = { git = "https://github.com/cjneely10/affinityprop", version = "0.1.1" }
+//! affinityprop = "0.1.1"
 //! ndarray = "0.15.4"
 //! ```
 //!
 //! ## As a command-line tool
 //! ```shell
-//! cargo install affinityprop --git https://github.com/cjneely10/affinityprop --version 0.1.1
+//! cargo install affinityprop
 //! ```
 //!
 //! # Usage
@@ -96,7 +96,6 @@
 //! ID1 val1 val2
 //! ID2 val3 val4
 //! ID3 val5 val6
-//! ...
 //! ```
 //!
 //! where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
@@ -109,7 +108,6 @@
 //! val1 val2
 //! val3 val4
 //! val5 val6
-//! ...
 //! ```
 //!
 //! provide the `-n` flag from the command line. IDs will automatically be assigned by zero-based
@@ -122,18 +120,16 @@
 //! ID1 sim11 sim12 sim13
 //! ID2 sim21 sim22 sim23
 //! ID3 sim31 sim32 sim33
-//! ...
 //! ```
 //!
 //! where row*i*, col*j* is the pairwise similarity between inputs *i* and *j*.
 //!
-//! Or, for files without row labels, users may optionally pass `-n -s 3`:
+//! Or, for files without row labels, users may pass `-n -s 3`:
 //!
 //! ```text
 //! sim11 sim12 sim13
 //! sim21 sim22 sim23
 //! sim31 sim32 sim33
-//! ...
 //! ```
 //!
 //! IDs will automatically be assigned by zero-based index.
@@ -188,7 +184,7 @@
 //! memory(GB) = p * 4 * N^2 / 2^30
 //! ```
 //!
-//! With `p = 4` for 32-bit floating-point precision and `p = 8` for 64-bit.
+//! For `N` inputs. `p = 4` for 32-bit floating-point precision and `p = 8` for 64-bit.
 //!
 pub use affinity_propagation::{AffinityPropagation, Cluster, ClusterMap, ClusterResults, Idx};
 pub use preference::Preference;
