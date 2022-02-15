@@ -174,7 +174,8 @@ mod test {
         writeln!(file, "id4\t4.0\t2.0\t4.0").unwrap();
         writeln!(file, "id5\t5.0\t1.0\t5.0").unwrap();
         // Read into starting data
-        let (data, labels) = from_file::<f32>(file.path().to_path_buf(), "\t", true, false).unwrap();
+        let (data, labels) =
+            from_file::<f32>(file.path().to_path_buf(), "\t", true, false).unwrap();
         // Validate ids
         for i in 0..5 {
             assert_eq!("id".to_string() + &(i + 1).to_string(), labels[i as usize]);
