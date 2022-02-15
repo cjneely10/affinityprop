@@ -10,11 +10,12 @@ mod tests {
     use std::str::FromStr;
 
     use ndarray::{Array2, Axis};
-    use num_traits::Float;
+    use num_traits::{abs, Float};
 
     use affinityprop::Preference::Value;
     use affinityprop::{
-        AffinityPropagation, LogEuclidean, NegCosine, NegEuclidean, Preference, Similarity,
+        AffinityPropagation, ClusterMap, Idx, LogEuclidean, NegCosine, NegEuclidean, Preference,
+        Similarity,
     };
 
     /// Load test data into Array for evaluation, and gather actual results into result map
@@ -49,6 +50,72 @@ mod tests {
                 });
             });
         Ok((out, test_data_map))
+    }
+
+    fn choose_2<F: Float + Send + Sync>(n: usize) -> F {
+        let f;
+        match n {
+            n if n < 2 => f = F::from(0.).unwrap(),
+            n if n == 2 => f = F::from(1.).unwrap(),
+            _ => {
+                let mut total = 1;
+                for i in n - 2 + 1..=n {
+                    total *= i;
+                }
+                f = F::from(total).unwrap() / F::from(2.).unwrap();
+            }
+        }
+        f
+    }
+
+    /// Test data is hand-written
+    #[test]
+    fn choose_2_is_valid() {
+        assert_eq!(choose_2::<f32>(0), 0.);
+        assert_eq!(choose_2::<f32>(1), 0.);
+        assert_eq!(choose_2::<f32>(2), 1.);
+        assert_eq!(choose_2::<f32>(3), 3.);
+        assert_eq!(choose_2::<f32>(4), 6.);
+    }
+
+    fn adj_rand_score<F: Float + Send + Sync>(labels_true: &[Idx], labels_pred: &[Idx]) -> F {
+        let zero = F::from(0.).unwrap();
+        let half = F::from(0.5).unwrap();
+        // Pairwise counting of clustering labels
+        let mut comparison_matrix: Array2<usize> =
+            Array2::zeros((labels_true.len(), labels_pred.len()));
+        labels_true
+            .iter()
+            .zip(labels_pred.iter())
+            .for_each(|(x, y)| {
+                comparison_matrix[[*x, *y]] += 1;
+            });
+
+        let comb: F = comparison_matrix.map(|v| choose_2(*v)).sum();
+        let row: F = comparison_matrix
+            .axis_iter(Axis(0))
+            .fold(zero, |acc, row| acc + choose_2(row.sum()));
+        let col: F = comparison_matrix
+            .axis_iter(Axis(1))
+            .fold(zero, |acc, col| acc + choose_2(col.sum()));
+        (comb - ((row * col) / choose_2(labels_true.len())))
+            / (half * (row + col) - ((row * col) / choose_2(labels_true.len())))
+    }
+
+    /// Test data derived from
+    /// <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.adjusted_rand_score.html>
+    #[test]
+    fn ari_is_valid() {
+        let a = vec![0, 0, 1, 1];
+        let b = vec![1, 1, 0, 0];
+        let c = vec![0, 0, 1, 2];
+        let d = vec![0, 1, 2, 3];
+        let e = vec![0; 4];
+        assert!(abs(adj_rand_score::<f32>(&a, &a) - 1.0) <= 0.1);
+        assert!(abs(adj_rand_score::<f32>(&a, &b) - 1.0) <= 0.1);
+        assert!(abs(adj_rand_score::<f32>(&c, &a) - 0.57) <= 0.01);
+        assert!(abs(adj_rand_score::<f32>(&a, &c) - 0.57) <= 0.01);
+        assert!(abs(adj_rand_score::<f32>(&e, &d) - 0.0) <= 0.1);
     }
 
     /// Match predicted clusters to actual data and generate best F1 for each cluster pair
@@ -139,6 +206,23 @@ mod tests {
         F::from(2.).unwrap() * precision * recall / (precision + recall)
     }
 
+    fn cluster_map_to_vector(map: &ClusterMap) -> Vec<Idx> {
+        let mut out = vec![0; map.iter().fold(0, |acc, val| acc + val.1.len())];
+        map.iter().for_each(|(cluster_label, cluster)| {
+            cluster
+                .into_iter()
+                .for_each(|point_label| out[*point_label] = *cluster_label)
+        });
+        out
+    }
+
+    fn generate_label_lists(actual: &ClusterMap, predicted: &ClusterMap) -> (Vec<Idx>, Vec<Idx>) {
+        (
+            cluster_map_to_vector(actual),
+            cluster_map_to_vector(predicted),
+        )
+    }
+
     /// Run test using dataset in file. Optionally compute F1 score.
     fn run_test<F, S>(
         ap: &AffinityPropagation<F>,
@@ -146,6 +230,7 @@ mod tests {
         path: PathBuf,
         preference: Preference<F>,
         expected_f1: F,
+        expected_ari: F,
     ) where
         F: Float + Send + Sync + FromStr + Default + std::fmt::Display,
         S: Similarity<F>,
@@ -155,9 +240,13 @@ mod tests {
         let (converged, test_results) = ap.predict(&test_array, s, preference);
         assert!(converged);
         assert_eq!(actual.len(), test_results.len());
+        let (actual_labels, predicted_labels) = generate_label_lists(&actual, &test_results);
+        let ari = adj_rand_score::<F>(&actual_labels, &predicted_labels);
         let f1 = compare_clusters::<F, S>(actual, test_results);
-        println!("Test(F1={:.2}): {:?}", f1, path);
+        println!("Test( F1={:.3}): {:?}", f1, path);
+        println!("Test(ARI={:.3}): {:?}", ari, path);
         assert!(f1 >= expected_f1);
+        assert!(ari >= expected_ari);
     }
 
     /// Helper function to load file from test directory
@@ -168,12 +257,13 @@ mod tests {
 
     #[test]
     fn ten_exemplars() {
-        let ap = AffinityPropagation::<f32>::new(0.5, 4, 400, 4000);
+        let ap = AffinityPropagation::<f32>::new(0.5, 4, 10, 4000);
         run_test(
             &ap,
             NegEuclidean::default(),
             file(&"near-exemplar-10.test"),
             Value(-1000.),
+            0.99,
             0.99,
         );
     }
@@ -187,19 +277,8 @@ mod tests {
             file(&"near-exemplar-50.test"),
             Value(-1000.),
             0.99,
+            0.99,
         );
-    }
-
-    #[test]
-    fn breast_cancer() {
-        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
-        run_test(
-            &ap,
-            LogEuclidean::default(),
-            file(&"breast_cancer.test"),
-            Value(-10000.),
-            0.60,
-        )
     }
 
     /// This test is very long-running. Run in release mode to reduce clock time.
@@ -212,6 +291,7 @@ mod tests {
             file(&"binsanity.test"),
             Value(-10.),
             0.98,
+            0.97,
         )
     }
 
@@ -224,6 +304,7 @@ mod tests {
             NegEuclidean::default(),
             file(&"binsanity.2.test"),
             Value(-10.),
+            0.98,
             0.98,
         )
     }
@@ -238,7 +319,8 @@ mod tests {
             LogEuclidean::default(),
             file(&"iris.test"),
             Preference::Median,
-            0.60,
+            0.98,
+            0.98,
         );
     }
 
@@ -252,7 +334,23 @@ mod tests {
             NegCosine::default(),
             file(&"diabetes.test"),
             Preference::Median,
-            0.60,
+            0.98,
+            0.98,
+        )
+    }
+
+    /// Very low ARI
+    #[test]
+    #[should_panic]
+    fn breast_cancer() {
+        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
+        run_test(
+            &ap,
+            LogEuclidean::default(),
+            file(&"breast_cancer.test"),
+            Value(-10000.),
+            0.98,
+            0.98,
         )
     }
 }
