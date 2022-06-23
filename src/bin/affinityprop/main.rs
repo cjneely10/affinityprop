@@ -17,7 +17,7 @@ mod ops;
 #[cfg(not(tarpaulin_include))]
 fn main() {
     let matches = clap_app!(affinityprop =>
-        (version: "0.1.1")
+        (version: "0.2.0")
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Path to input file")

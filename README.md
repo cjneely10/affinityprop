@@ -1,6 +1,6 @@
 [![Rust](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/cjneely10/affinityprop/actions/workflows/rust.yml)
 [![affinityprop crate](https://img.shields.io/crates/v/affinityprop?color=blue&style=flat)](https://crates.io/crates/affinityprop)
-[![affinityprop docs](https://img.shields.io/docsrs/affinityprop)](https://docs.rs/affinityprop/0.1.1/affinityprop/)
+[![affinityprop docs](https://img.shields.io/docsrs/affinityprop)](https://docs.rs/affinityprop/0.2.0/affinityprop/)
 [![GitHub](https://img.shields.io/github/license/cjneely10/affinityprop)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![affinityprop: rustc 1.58](https://img.shields.io/badge/affinityprop-rustc__1.58-blue)](https://doc.rust-lang.org/rustc/what-is-rustc.html)
 ![coverage](https://img.shields.io/badge/coverage-95%25-success)
@@ -48,7 +48,7 @@ with `rustc >=1.58`
 ## In Rust code
 ```toml
 [dependencies]
-affinityprop = "0.1.1"
+affinityprop = "0.2.0"
 ndarray = "0.15.4"
 ```
 
@@ -146,7 +146,7 @@ IDs will automatically be assigned by zero-based index.
 
 ### Help Menu
 ```text
-affinityprop 0.1.1
+affinityprop 0.2.0
 Chris N. <christopher.neely1200@gmail.com>
 Vectorized and Parallelized Affinity Propagation
 

@@ -38,12 +38,12 @@ where
     for (idx, line) in reader.lines().map(|l| l.unwrap()).enumerate() {
         if line.is_empty() {
             return Err(FileParseError {
-                message: format!("Empty line detected at line {}", idx + 1),
+                message: format!("line {}: empty line detected", idx + 1),
             });
         }
         if !line.contains(d) {
             return Err(FileParseError {
-                message: format!("Input file is not properly delimited at line {}", idx + 1),
+                message: format!("line {}: not properly delimited", idx + 1),
             });
         }
         let mut line = line.split(d);
@@ -54,7 +54,7 @@ where
                     labels.push(l.to_string());
                 } else {
                     return Err(FileParseError {
-                        message: format!("Error loading line label `{}` at line {}", l, idx + 1),
+                        message: format!("line {}: empty line label `{}`", idx + 1, l),
                     });
                 }
             }
@@ -68,23 +68,18 @@ where
                 Ok(v) => {
                     if v.is_nan() {
                         return Err(FileParseError {
-                            message: format!(
-                                "nan value detected at line {} col {}",
-                                idx + 1,
-                                i + 1,
-                            ),
+                            message: format!("line {} col {}: nan value detected", idx + 1, i + 1),
                         });
                     }
                     entry.push(v);
                 }
-                Err(e) => {
+                Err(_) => {
                     return Err(FileParseError {
                         message: format!(
-                            "Error converting value `{}` to float at line {} col {}\n\t{}",
-                            s,
+                            "line {} col {}: unable to convert `{}` to float",
                             idx + 1,
                             i + 1,
-                            e,
+                            s
                         ),
                     });
                 }
