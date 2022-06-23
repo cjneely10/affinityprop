@@ -29,8 +29,9 @@ where
         Preference::Value(pref) => pref,
         Preference::Median => median(s),
         Preference::List(l) => {
-            assert!(
-                s_dim.0 == l.len(),
+            assert_eq!(
+                s_dim.0,
+                l.len(),
                 "Preference list length does not match input length!"
             );
             Zip::from(l)

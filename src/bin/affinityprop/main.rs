@@ -166,20 +166,11 @@ fn predict<F>(
         Some(pref) => Preference::Value(pref),
         None => Preference::Median,
     };
-    let a: (bool, HashMap<usize, Vec<usize>>);
-    match similarity {
-        1 => {
-            a = ap.predict(&x, NegCosine::default(), preference);
-        }
-        2 => {
-            a = ap.predict(&x, LogEuclidean::default(), preference);
-        }
-        3 => {
-            a = ap.predict_precalculated(x, preference);
-        }
-        _ => {
-            a = ap.predict(&x, NegEuclidean::default(), preference);
-        }
-    }
+    let a: (bool, HashMap<usize, Vec<usize>>) = match similarity {
+        1 => ap.predict(&x, NegCosine::default(), preference),
+        2 => ap.predict(&x, LogEuclidean::default(), preference),
+        3 => ap.predict_precalculated(x, preference),
+        _ => ap.predict(&x, NegEuclidean::default(), preference),
+    };
     display_results(a.0, &a.1, y);
 }

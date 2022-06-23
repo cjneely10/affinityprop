@@ -176,7 +176,7 @@ where
         Zip::from(self.tmp.axis_iter_mut(Axis(0)))
             .and(self.similarity.axis_iter(Axis(0)))
             .and(&max1)
-            .par_for_each(|mut t, s, m| t.iter_mut().zip(s.iter()).for_each(|(t, s)| *t = *s - *m));
+            .par_for_each(|mut t, s, &m| t.iter_mut().zip(s.iter()).for_each(|(t, s)| *t = *s - m));
 
         // tmp[ind, I] = S[ind, I] - Y2
         Zip::from(self.tmp.axis_iter_mut(Axis(0)))
@@ -203,7 +203,7 @@ where
         // np.maximum(R, 0, tmp)
         Zip::from(&mut self.tmp)
             .and(&self.responsibility)
-            .par_for_each(|t, r| *t = *r);
+            .par_for_each(|t, &r| *t = r);
         self.tmp.par_map_inplace(|v| {
             if *v < self.zero {
                 *v = self.zero;
@@ -248,9 +248,9 @@ where
     fn max_argmax(data: ArrayView<F, Dim<[usize; 1]>>) -> (usize, F) {
         let mut max_pos = 0;
         let mut max: F = data[0];
-        data.iter().enumerate().for_each(|(idx, val)| {
-            if *val > max {
-                max = *val;
+        data.iter().enumerate().for_each(|(idx, &val)| {
+            if val > max {
+                max = val;
                 max_pos = idx;
             }
         });
