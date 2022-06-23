@@ -313,9 +313,6 @@ mod test {
             assert!(
                 actual.len() == exemplars.len()
                     && actual.iter().all(|(idx, values)| {
-                        if !exemplars.contains_key(idx) {
-                            return false;
-                        }
                         let v: HashSet<usize> =
                             HashSet::from_iter(values.iter().map(|v| v.clone()));
                         let a: HashSet<usize> = HashSet::from_iter(

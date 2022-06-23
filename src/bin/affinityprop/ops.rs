@@ -28,7 +28,7 @@ pub(crate) fn from_file<F>(
 ) -> Result<(Array2<F>, Vec<String>), FileParseError>
 where
     F: Float + Default + FromStr,
-    <F as FromStr>::Err: Debug,
+    <F as FromStr>::Err: Debug + Display,
 {
     let reader = BufReader::new(File::open(p).expect("Unable to open file"));
     let mut labels = Vec::new();
@@ -36,37 +36,57 @@ where
     let mut label: usize = 0;
     // Read tab-delimited file
     for (idx, line) in reader.lines().map(|l| l.unwrap()).enumerate() {
+        if line.is_empty() {
+            return Err(FileParseError {
+                message: format!("Empty line detected at line {}", idx + 1),
+            });
+        }
         if !line.contains(d) {
             return Err(FileParseError {
-                message: "Input file is not properly delimited".to_string(),
+                message: format!("Input file is not properly delimited at line {}", idx + 1),
             });
         }
         let mut line = line.split(d);
         // ID as first col if not precalculated
         if collect_labels {
-            let id = match line.next() {
-                Some(l) => l.to_string(),
-                None => {
+            if let Some(l) = line.next() {
+                if !l.is_empty() {
+                    labels.push(l.to_string());
+                } else {
                     return Err(FileParseError {
-                        message: "Error loading line label".to_string(),
-                    })
+                        message: format!("Error loading line label `{}` at line {}", l, idx + 1),
+                    });
                 }
-            };
-            labels.push(id);
+            }
         } else {
             labels.push(label.to_string());
             label += 1;
         }
         let mut entry: Vec<F> = vec![];
-        for s in line {
+        for (i, s) in line.enumerate() {
             match s.parse::<F>() {
                 Ok(v) => {
+                    if v.is_nan() {
+                        return Err(FileParseError {
+                            message: format!(
+                                "nan value detected at line {} col {}",
+                                idx + 1,
+                                i + 1,
+                            ),
+                        });
+                    }
                     entry.push(v);
                 }
-                Err(_) => {
+                Err(e) => {
                     return Err(FileParseError {
-                        message: format!("Error parsing file at line {}", idx + 1),
-                    })
+                        message: format!(
+                            "Error converting value `{}` to float at line {} col {}\n\t{}",
+                            s,
+                            idx + 1,
+                            i + 1,
+                            e,
+                        ),
+                    });
                 }
             };
         }
@@ -84,15 +104,23 @@ where
     if is_precalculated {
         // Validate data all has same length
         length = data.len();
-        message = "Precalculated input data must be square!".to_string();
+        message = "Precalculated input data must be square";
     } else {
         // Validate data all has same length
         length = data[0].len();
-        message = "Input data rows must all be same length!".to_string();
+        message = "Input data rows must all be same length";
     }
-    for v in data.iter() {
+    for (i, v) in data.iter().enumerate() {
         if v.len() != length {
-            return Err(FileParseError { message });
+            return Err(FileParseError {
+                message: format!(
+                    "Error at line {}: {}\n\tlength = {}\n\texpected = {}",
+                    i + 1,
+                    message,
+                    v.len(),
+                    length
+                ),
+            });
         }
     }
     // Convert data to Array2
@@ -118,12 +146,14 @@ pub(crate) fn display_results<L>(
     let mut writer = BufWriter::new(stdout());
     // Output header
     write_header(&mut writer, results, converged);
+    // Write exemplar members
     results.iter().enumerate().for_each(|(idx, (&key, value))| {
         write_exemplar(&mut writer, idx + 1, key, value, &labels);
     });
     writer.flush().unwrap();
 }
 
+#[cfg(not(tarpaulin_include))]
 fn write_header<W: Write>(writer: &mut W, results: &HashMap<usize, Vec<usize>>, converged: bool) {
     writer.write_all(b"Converged=").unwrap();
     writer.write_all(converged.to_string().as_bytes()).unwrap();
@@ -145,6 +175,7 @@ fn write_header<W: Write>(writer: &mut W, results: &HashMap<usize, Vec<usize>>, 
     writer.write_all(b"\n").unwrap();
 }
 
+#[cfg(not(tarpaulin_include))]
 fn write_exemplar<W, L>(
     writer: &mut W,
     cluster_idx: usize,
@@ -169,7 +200,6 @@ fn write_exemplar<W, L>(
         .unwrap();
     writer.write_all(b"\n").unwrap();
 
-    // Write exemplar members
     let mut it = value.iter().copied();
     writer
         .write_all(labels[it.next().unwrap()].as_ref())
@@ -226,6 +256,24 @@ mod test {
 
     #[test]
     #[should_panic]
+    fn invalid_contains_nan() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
+        writeln!(file, "id2\t2.0\t4.0\tnan").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", true, false).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_misformatted_file() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "ID1\t1.0\t2.0\t3.0").unwrap();
+        writeln!(file, "\t1.0\t2.0\t3.0").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", true, false).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
     fn invalid_load_mismatched_data() {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
@@ -239,7 +287,7 @@ mod test {
     fn invalid_blank_line() {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
-        writeln!(file).unwrap();
+        writeln!(file, "").unwrap();
         writeln!(file, "id3\t1.0\t5.0\t1.0").unwrap();
         let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", true, false).unwrap();
     }
@@ -280,7 +328,6 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
     fn precalculated_file_format_with_labels() {
         // Write tempdata
         let mut file = NamedTempFile::new().unwrap();
@@ -290,7 +337,7 @@ mod test {
         let (_, y) = from_file::<f32>(file.path().to_path_buf(), " ", true, true).unwrap();
         let mut expected_id: usize = 1;
         for id in y {
-            assert_eq!(expected_id.to_string(), id);
+            assert_eq!("ID".to_string() + &expected_id.to_string(), id);
             expected_id += 1;
         }
     }
