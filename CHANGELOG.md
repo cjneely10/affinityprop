@@ -19,5 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Small edits to pass-by-value instead of by-reference
 
+### Fixed
+- `nan` values were accepted as valid input.
+  - No valid similarity calculation is present for `nan` values
+
 ## [0.1.1] - 2022-02-15
 First release of `affinityprop`
