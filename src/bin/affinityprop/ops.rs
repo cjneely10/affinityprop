@@ -117,42 +117,68 @@ pub(crate) fn display_results<L>(
 {
     let mut writer = BufWriter::new(stdout());
     // Output header
-    writer
-        .write_all(
-            format!(
-                "Converged={} nClusters={} nSamples={}\n",
-                converged,
-                results.len(),
-                results.iter().map(|(_, v)| v.len()).sum::<usize>()
-            )
-            .as_ref(),
-        )
-        .unwrap();
-    results.iter().enumerate().for_each(|(idx, (key, value))| {
-        // Write each exemplar
-        writer
-            .write_all(
-                format!(
-                    ">Cluster={} size={} exemplar={}\n",
-                    idx + 1,
-                    value.len(),
-                    labels[*key]
-                )
-                .as_ref(),
-            )
-            .unwrap();
-        // Write exemplar members
-        let mut it = value.iter();
-        writer
-            .write_all(labels[*it.next().unwrap()].as_ref())
-            .unwrap();
-        it.for_each(|v| {
-            writer.write_all(b",").unwrap();
-            writer.write_all(labels[*v].as_ref()).unwrap();
-        });
-        writer.write_all(b"\n").unwrap();
+    write_header(&mut writer, results, converged);
+    results.iter().enumerate().for_each(|(idx, (&key, value))| {
+        write_exemplar(&mut writer, idx + 1, key, value, &labels);
     });
     writer.flush().unwrap();
+}
+
+fn write_header<W: Write>(writer: &mut W, results: &HashMap<usize, Vec<usize>>, converged: bool) {
+    writer.write_all(b"Converged=").unwrap();
+    writer.write_all(converged.to_string().as_bytes()).unwrap();
+    writer.write_all(b" nClusters=").unwrap();
+    writer
+        .write_all(results.len().to_string().as_bytes())
+        .unwrap();
+    writer.write_all(b" nSamples=").unwrap();
+    writer
+        .write_all(
+            results
+                .iter()
+                .map(|(_, v)| v.len())
+                .sum::<usize>()
+                .to_string()
+                .as_bytes(),
+        )
+        .unwrap();
+    writer.write_all(b"\n").unwrap();
+}
+
+fn write_exemplar<W, L>(
+    writer: &mut W,
+    cluster_idx: usize,
+    key: usize,
+    value: &[usize],
+    labels: &[L],
+) where
+    W: Write,
+    L: Display + AsRef<[u8]>,
+{
+    writer.write_all(b">Cluster=").unwrap();
+    writer
+        .write_all(cluster_idx.to_string().as_bytes())
+        .unwrap();
+    writer.write_all(b" size=").unwrap();
+    writer
+        .write_all(value.len().to_string().as_bytes())
+        .unwrap();
+    writer.write_all(b" exemplar=").unwrap();
+    writer
+        .write_all(labels[key].to_string().as_bytes())
+        .unwrap();
+    writer.write_all(b"\n").unwrap();
+
+    // Write exemplar members
+    let mut it = value.iter().copied();
+    writer
+        .write_all(labels[it.next().unwrap()].as_ref())
+        .unwrap();
+    it.for_each(|v| {
+        writer.write_all(b",").unwrap();
+        writer.write_all(labels[v].as_ref()).unwrap();
+    });
+    writer.write_all(b"\n").unwrap();
 }
 
 #[cfg(test)]
