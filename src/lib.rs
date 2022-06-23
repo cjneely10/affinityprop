@@ -40,7 +40,7 @@
 //! ## In Rust code
 //! ```toml
 //! [dependencies]
-//! affinityprop = "0.1.1"
+//! affinityprop = "0.2.0"
 //! ndarray = "0.15.4"
 //! ```
 //!
@@ -136,7 +136,7 @@
 //!
 //! ### Help Menu
 //! ```text
-//! affinityprop 0.1.1
+//! affinityprop 0.2.0
 //! Chris N. <christopher.neely1200@gmail.com>
 //! Vectorized and Parallelized Affinity Propagation
 //!

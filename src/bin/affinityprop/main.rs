@@ -17,7 +17,7 @@ mod ops;
 #[cfg(not(tarpaulin_include))]
 fn main() {
     let matches = clap_app!(affinityprop =>
-        (version: "0.1.1")
+        (version: "0.2.0")
         (author: "Chris N. <christopher.neely1200@gmail.com>")
         (about: "Vectorized and Parallelized Affinity Propagation")
         (@arg INPUT: -i --input +takes_value +required "Path to input file")
@@ -166,20 +166,11 @@ fn predict<F>(
         Some(pref) => Preference::Value(pref),
         None => Preference::Median,
     };
-    let a: (bool, HashMap<usize, Vec<usize>>);
-    match similarity {
-        1 => {
-            a = ap.predict(&x, NegCosine::default(), preference);
-        }
-        2 => {
-            a = ap.predict(&x, LogEuclidean::default(), preference);
-        }
-        3 => {
-            a = ap.predict_precalculated(x, preference);
-        }
-        _ => {
-            a = ap.predict(&x, NegEuclidean::default(), preference);
-        }
-    }
+    let a: (bool, HashMap<usize, Vec<usize>>) = match similarity {
+        1 => ap.predict(&x, NegCosine::default(), preference),
+        2 => ap.predict(&x, LogEuclidean::default(), preference),
+        3 => ap.predict_precalculated(x, preference),
+        _ => ap.predict(&x, NegEuclidean::default(), preference),
+    };
     display_results(a.0, &a.1, y);
 }
