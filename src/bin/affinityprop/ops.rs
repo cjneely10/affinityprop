@@ -99,11 +99,11 @@ where
     if is_precalculated {
         // Validate data all has same length
         length = data.len();
-        message = "Precalculated input data must be square";
+        message = "precalculated input data must be square";
     } else {
         // Validate data all has same length
         length = data[0].len();
-        message = "Input data rows must all be same length";
+        message = "input data rows must all be same length";
     }
     for (i, v) in data.iter().enumerate() {
         if v.len() != length {
