@@ -13,7 +13,7 @@ pub(crate) struct FileParseError {
     pub message: String,
 }
 
-/// Reads in a file formatted as (tab separated):
+/// Reads in a file formatted as (delimiter-separated):
 ///     id1 val1 val2 val3
 ///     id2 val1 val2 val3
 ///
