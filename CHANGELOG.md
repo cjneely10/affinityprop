@@ -14,7 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Better stderr messages on file-parsing errors
   - Line/col numbers and kind of error
-  - Disallow `nan` values in input per Affinity Propagation algorithm requirements
 
 ### Changed
 - Small edits to pass-by-value instead of by-reference
