@@ -41,6 +41,7 @@ where
 #[derive(Debug, Clone)]
 pub struct NegEuclidean<F> {
     neg_one: F,
+    zero: F,
 }
 
 impl<F> Default for NegEuclidean<F>
@@ -50,6 +51,7 @@ where
     fn default() -> Self {
         Self {
             neg_one: F::from(-1.).unwrap(),
+            zero: F::from(0.).unwrap(),
         }
     }
 }
@@ -61,6 +63,7 @@ where
     fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F {
         let mut row_diff = a - b;
         row_diff.map_inplace(|_a| *_a = (*_a).powi(2));
+        row_diff.mapv_inplace(|v| if v.is_nan() { self.zero } else { v });
         self.neg_one * row_diff.sum()
     }
 }
@@ -69,6 +72,19 @@ where
 #[derive(Debug, Clone)]
 pub struct NegCosine<F> {
     neg_one: F,
+    zero: F,
+}
+
+impl<F> NegCosine<F>
+where
+    F: Float + Send + Sync,
+{
+    fn magnitude(&self, x: &ArrayView1<F>) -> F {
+        x.map(|r| r.powi(2))
+            .map(|v| if v.is_nan() { self.zero } else { *v })
+            .sum()
+            .sqrt()
+    }
 }
 
 impl<F> Default for NegCosine<F>
@@ -78,6 +94,7 @@ where
     fn default() -> Self {
         Self {
             neg_one: F::from(-1.).unwrap(),
+            zero: F::from(0.).unwrap(),
         }
     }
 }
@@ -87,9 +104,19 @@ where
     F: Float + Send + Sync,
 {
     fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F {
-        let dot_product: F = Zip::from(a).and(b).map_collect(|r1, r2| *r1 * *r2).sum();
-        let x_magnitude = a.map(|r| r.powi(2)).sum().sqrt();
-        let y_magnitude = b.map(|r| r.powi(2)).sum().sqrt();
+        let dot_product: F = Zip::from(a)
+            .and(b)
+            .map_collect(|r1, r2| *r1 * *r2)
+            .map(|v| if v.is_nan() { self.zero } else { *v })
+            .sum();
+        let x_magnitude = self.magnitude(a);
+        let y_magnitude = self.magnitude(b);
+        if x_magnitude == self.zero {
+            panic!("x magnitude is 0");
+        }
+        if y_magnitude == self.zero {
+            panic!("y magnitude is 0");
+        }
         self.neg_one * dot_product / x_magnitude / y_magnitude
     }
 }
@@ -105,6 +132,7 @@ where
     fn similarity(&self, a: &ArrayView1<F>, b: &ArrayView1<F>) -> F {
         let mut row_diff = a - b;
         row_diff.map_inplace(|_a| *_a = (*_a).powi(2).log2());
+        row_diff.mapv_inplace(|v| if v.is_nan() { F::from(0.).unwrap() } else { v });
         row_diff.sum()
     }
 }
@@ -134,6 +162,20 @@ mod test {
         Zip::from(&s)
             .and(&actual)
             .for_each(|a: &f64, b: &f64| assert!((a - b).abs() < 1e-4));
+    }
+
+    #[test]
+    #[should_panic]
+    fn cosine_zero_magnitude_x() {
+        let x = arr2(&[[0., 0., 0., 0.], [1., 0., 0., 0.]]);
+        let _ = calculate_similarity(&x, NegCosine::default());
+    }
+
+    #[test]
+    #[should_panic]
+    fn cosine_zero_magnitude_y() {
+        let x = arr2(&[[1., 0., 0., 0.], [0., 0., 0., 0.]]);
+        let _ = calculate_similarity(&x, NegCosine::default());
     }
 
     #[test]

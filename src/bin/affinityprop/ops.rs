@@ -67,9 +67,7 @@ where
             match s.parse::<F>() {
                 Ok(v) => {
                     if v.is_nan() {
-                        return Err(FileParseError {
-                            message: format!("line {} col {}: nan value detected", idx + 1, i + 1),
-                        });
+                        eprintln!("line {} col {}: nan value detected", idx + 1, i + 1);
                     }
                     entry.push(v);
                 }
@@ -84,6 +82,15 @@ where
                     });
                 }
             };
+        }
+        if entry
+            .iter()
+            .fold(0, |acc, v| acc + if v.is_nan() { 1 } else { 0 })
+            == entry.len()
+        {
+            return Err(FileParseError {
+                message: format!("line {}: detected all nan row", idx + 1),
+            });
         }
         // Rest are data
         data.push(entry);
@@ -250,11 +257,19 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
-    fn invalid_contains_nan() {
+    fn valid_contains_nan() {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
         writeln!(file, "id2\t2.0\t4.0\tnan").unwrap();
+        let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", true, false).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn in_valid_contains_nan() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "id1\t1.0\t5.0\t1.0").unwrap();
+        writeln!(file, "id2\tnan\tnan\tnan").unwrap();
         let (_, _) = from_file::<f32>(file.path().to_path_buf(), "\t", true, false).unwrap();
     }
 

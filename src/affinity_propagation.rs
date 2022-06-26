@@ -158,7 +158,17 @@ mod test {
     fn simple() {
         let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
         let ap = AffinityPropagation::default();
-        let (converged, results) = ap.predict(&x, NegEuclidean::default(), Preference::Value(-10.));
+        let (converged, results) = ap.predict(&x, NegEuclidean::default(), Value(-10.));
+        assert!(converged);
+        assert_eq!(1, results.len());
+        assert!(results.contains_key(&1));
+    }
+
+    #[test]
+    fn with_nan() {
+        let x: Array2<f32> = arr2(&[[1., 1., 1.], [2., f32::NAN, 2.], [3., 3., 3.]]);
+        let ap = AffinityPropagation::default();
+        let (converged, results) = ap.predict(&x, NegEuclidean::default(), Value(-10.));
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&1));
