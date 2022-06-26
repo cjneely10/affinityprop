@@ -136,7 +136,7 @@
 //!
 //! ### Help Menu
 //! ```text
-//! affinityprop 0.2.0
+//! affinityprop 0.3.0-alpha
 //! Chris N. <christopher.neely1200@gmail.com>
 //! Vectorized and Parallelized Affinity Propagation
 //!

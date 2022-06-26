@@ -120,6 +120,12 @@ where
     pub fn predict_precalculated(&self, s: Array2<F>, p: Preference<F>) -> ClusterResults {
         let mut s = s;
         assert!(s.is_square(), "similarity dim must be NxN");
+        for v in &s {
+            assert!(
+                !v.is_nan(),
+                "nan values in similarity matrix are not supported by Affinity Propagation"
+            )
+        }
         place_preference(&mut s, p);
         self.predict_parallel(s)
     }
@@ -237,5 +243,15 @@ mod test {
         assert!(converged);
         assert_eq!(1, results.len());
         assert!(results.contains_key(&0));
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_pre_calculated() {
+        let x: Array2<f32> = test_data();
+        let mut s = calculate_similarity(&x, NegEuclidean::default());
+        s[[2, 0]] = f32::NAN;
+        let ap = AffinityPropagation::default();
+        let _ = ap.predict_precalculated(s, Value(-10.));
     }
 }

@@ -10,7 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Python bindings
 - [PyO3](https://github.com/PyO3/pyo3)-derived bindings for use within Python
 
-## [0.2.0] - 2022-07-24
+## [0.3.0-alpha] - 2022-07-01
+### Changed
+- NaN values are supported in input matrices
+  - Previously, cli would exit on nan detection
+  - Now, notify user via stderr
+    - Only exit if full row of NaN found
+  - Provided similarity calculations now handle NaN values by replacing them with `0` prior to final sum operations
+    - See `NegEuclidean`'s `Similarity` implementation
+- NaN check in `predict_precalculated`
+  - Panic on detection
+
+## [0.2.0] - 2022-06-24
 ### Added
 - Better stderr messages on file-parsing errors
   - Line/col numbers and kind of error

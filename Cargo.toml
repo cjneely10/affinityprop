@@ -1,6 +1,6 @@
 [package]
 name = "affinityprop"
-version = "0.2.0"
+version = "0.3.0-alpha"
 edition = "2021"
 authors = ["Chris Neely <christopher.neely1200@gmail.com>"]
 license = "GPL-3.0"

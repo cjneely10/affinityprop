@@ -46,6 +46,16 @@ with `rustc >=1.58`
 
 # Installation
 ## In Rust code
+Latest version:
+
+```toml
+[dependencies]
+affinityprop = "https://github.com/cjneely10/affinityprop"
+ndarray = "0.15.4"
+```
+
+Current stable version:
+
 ```toml
 [dependencies]
 affinityprop = "0.2.0"
@@ -53,6 +63,14 @@ ndarray = "0.15.4"
 ```
 
 ## As a command-line tool
+Latest version:
+
+```shell
+cargo install --git https://github.com/cjneely10/affinityprop
+```
+
+Current stable version:
+
 ```shell
 cargo install affinityprop
 ```
@@ -146,7 +164,7 @@ IDs will automatically be assigned by zero-based index.
 
 ### Help Menu
 ```text
-affinityprop 0.2.0
+affinityprop 0.3.0-alpha
 Chris N. <christopher.neely1200@gmail.com>
 Vectorized and Parallelized Affinity Propagation
 
