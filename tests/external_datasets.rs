@@ -1,6 +1,7 @@
 #[cfg(not(tarpaulin))]
 #[cfg(not(tarpaulin_include))]
 mod tests {
+    use rand::Rng;
     use std::collections::{HashMap, HashSet};
     use std::ffi::OsStr;
     use std::fmt::Debug;
@@ -11,6 +12,7 @@ mod tests {
 
     use ndarray::{Array2, Axis};
     use num_traits::{abs, Float};
+    use rand::distributions::{Distribution, Standard};
 
     use affinityprop::Preference::Value;
     use affinityprop::{
@@ -223,7 +225,68 @@ mod tests {
         )
     }
 
-    /// Run test using dataset in file. Optionally compute F1 score.
+    /// Place F::NAN values randomly throughout data matrix
+    fn insert_nan<F>(
+        mut test_data: Array2<F>,
+        max_nans_per_entry: usize,
+        percent_with_nans: F,
+    ) -> Array2<F>
+    where
+        F: Float + Send + Sync + FromStr + Default + std::fmt::Display,
+        <F as FromStr>::Err: Debug,
+        Standard: Distribution<F>,
+    {
+        if percent_with_nans > F::from(1.0_f32).unwrap() {
+            panic!("Percent must be < 1");
+        }
+        let mut rng = rand::thread_rng();
+        test_data.axis_iter_mut(Axis(0)).for_each(|mut ax| {
+            let num_nans: usize = rng.gen_range(0..max_nans_per_entry + 1);
+            let mut pos = HashSet::new();
+            (0..num_nans).for_each(|_| {
+                if rng.gen::<F>() <= percent_with_nans {
+                    let mut idx: usize = rng.gen_range(0..ax.len());
+                    loop {
+                        if pos.contains(&idx) {
+                            idx = rng.gen_range(0..ax.len());
+                        } else {
+                            pos.insert(idx);
+                            break;
+                        }
+                    }
+                    ax[idx] = F::nan();
+                }
+            });
+        });
+        test_data
+    }
+
+    /// Run test using dataset in file and added NaN. Compute F1 and ARI.
+    fn nan_test<F, S>(
+        ap: &AffinityPropagation<F>,
+        s: S,
+        path: PathBuf,
+        preference: Preference<F>,
+        max_nans_per_entry: usize,
+        percent_with_nans: F,
+    ) where
+        F: Float + Send + Sync + FromStr + Default + std::fmt::Display,
+        Standard: Distribution<F>,
+        S: Similarity<F>,
+        <F as FromStr>::Err: Debug,
+    {
+        let (test_array, actual) = load_data::<F>(path.clone()).unwrap();
+        let test_array = insert_nan(test_array, max_nans_per_entry, percent_with_nans);
+        let (converged, test_results) = ap.predict(&test_array, s, preference);
+        let (actual_labels, predicted_labels) = generate_label_lists(&actual, &test_results);
+        let ari = adj_rand_score::<F>(&actual_labels, &predicted_labels);
+        let f1 = compare_clusters::<F, S>(actual, test_results);
+        println!("converged={}", converged);
+        println!("Test( F1={:.3}): {:?}", f1, path);
+        println!("Test(ARI={:.3}): {:?}", ari, path);
+    }
+
+    /// Run test using dataset in file. Compute F1 and ARI.
     fn run_test<F, S>(
         ap: &AffinityPropagation<F>,
         s: S,
@@ -278,6 +341,32 @@ mod tests {
             Value(-1000.),
             0.99,
             0.99,
+        );
+    }
+
+    #[test]
+    fn fifty_exemplars_with_nan() {
+        let ap = AffinityPropagation::<f32>::new(0.5, 4, 400, 4000);
+        nan_test(
+            &ap,
+            NegEuclidean::default(),
+            file(&"near-exemplar-50.test"),
+            Value(-1000.),
+            2,
+            0.05,
+        );
+    }
+
+    #[test]
+    fn binsanity2_with_nan() {
+        let ap = AffinityPropagation::<f32>::new(0.95, 4, 400, 4000);
+        nan_test(
+            &ap,
+            NegEuclidean::default(),
+            file(&"binsanity.2.test"),
+            Value(-10.),
+            1,
+            0.02,
         );
     }
 

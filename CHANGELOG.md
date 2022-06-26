@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Previously, cli would exit on nan detection
   - Now, notify user via stderr
     - Only exit if full row of NaN found
-  - Provided similarity calculations now handle NaN values by replacing them with `0` prior to final sum operations
+  - Provided similarity calculations negate NaN effectd by replacing them in final sum operations with `0`
     - See `NegEuclidean`'s `Similarity` implementation
 - NaN check in `predict_precalculated`
   - Panic on detection

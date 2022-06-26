@@ -117,6 +117,9 @@ let (converged, results) = ap.predict_precalculated(s, Preference::Value(-10.));
 assert!(converged && results.len() == 1 && results.contains_key(&1));
 ```
 
+**Note on `NaN`**: `f32::NAN` and `f64::NAN` are allowed as input into `AffinityPropagation::predict`, but will cause the program
+to panic if provided in `AffinityPropagation::predict_precalculated`.
+
 ## From the Command Line
 `affinityprop` can be run from the command-line and used to analyze a file of data:
 
@@ -127,6 +130,10 @@ ID3 val5 val6
 ```
 
 where ID*n* is any string identifier and val*n* are floating-point (decimal) values.
+
+`nan` values are allowed as input when using a provided similarity calculation, but NOT for `-s 3` precalculated similarity input matrices.
+The program will notify the user of `nan` input, but will only terminate if an entire data row of `nan` values is encountered.
+
 The file delimiter is provided from the command line with the `-l` flag.
 Similarity will be calculated based on the option set by the `-s` flag.
 
